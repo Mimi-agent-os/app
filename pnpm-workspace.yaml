@@ -1,0 +1,2 @@
+overrides:
+  '@mimi-os/protocol': link:../protocol

@@ -1,0 +1,25 @@
+/* ── chat rows: the home list and the agent page's Chats tab ── */
+
+.chat-row{position:relative;display:flex;align-items:center;min-height:var(--row-h);border-radius:var(--r1)}
+@media (hover:hover){.chat-row:hover{background:var(--hover)}}
+.chat-row[data-open]{background:var(--sel)}
+.chat-hit{flex:1;min-width:0;align-self:stretch;display:flex;align-items:center;gap:var(--s2);padding:0 var(--s2) 0 36px;border:0;border-radius:inherit;background:transparent;color:var(--ink-2);font:var(--f-md);text-align:left;cursor:pointer;-webkit-touch-callout:none;user-select:none}
+.chat-row[data-open] .chat-hit{color:var(--ink)}
+/* on the selection fill ink-3 drops under 4.5:1 */
+.chat-row[data-open] .chat-meta{color:var(--ink-2)}
+.chat-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-pin{display:inline-flex;flex:none;color:var(--ink-3)}
+.chat-meta{margin-left:auto;flex:none;font:var(--f-xs);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.chat-meta .state{font:var(--f-xs)}
+.chat-meta .countdown{font-size:11px}
+.chat-row[data-stale] .chat-hit{color:var(--ink-3);cursor:default}
+.chat-row[data-variant=full]{min-height:calc(var(--row-h) + 4px)}
+.chat-row[data-variant=full] .chat-hit{padding:0 var(--s2) 0 10px;color:var(--ink)}
+.chat-row[data-variant=full][data-stale] .chat-hit{color:var(--ink-3)}
+.chat-more{flex:none;margin-right:3px}
+
+@media (pointer:fine){
+  .chat-more{opacity:0}
+  .chat-row:hover .chat-more,.chat-row:focus-within .chat-more{opacity:1}
+}
+@media (hover:none){.chat-hit:active{background:var(--hover)}}

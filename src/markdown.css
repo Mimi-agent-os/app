@@ -1,0 +1,48 @@
+/* markdown inside a message or an inbox item: prose spacing is local here, everything else is a token */
+
+/* pre-wrap belongs to raw text only; parsed markdown already has its own blocks and would double every blank line */
+.md{white-space:normal;text-wrap:pretty}
+.md p,.md ul,.md ol,.md blockquote,.md hr,.md .md-code,.md .md-table-wrap{margin:10px 0}
+.md>:first-child{margin-top:0}
+.md>:last-child{margin-bottom:0}
+.md strong{font-weight:600;color:var(--ink)}
+.md em{font-style:italic}
+.md h1,.md h2,.md h3{margin:18px 0 6px;letter-spacing:var(--track-tight)}
+.md h1{font:var(--f-lg)}
+.md h2{font:var(--f-body);font-weight:600}
+.md h3{font:var(--f-md);font-weight:600;color:var(--ink-2)}
+.md ul{list-style:disc}
+.md ol{list-style:decimal}
+.md ul,.md ol{padding-left:22px}
+.md li{margin:4px 0}
+.md li::marker{color:var(--ink-3)}
+.md li>ul,.md li>ol{margin:4px 0}
+.md li>p{margin:0}
+.md blockquote{margin-left:0;margin-right:0;padding-left:12px;border-left:2px solid var(--line-2);color:var(--ink-2)}
+.md hr{height:1px;border:0;background:var(--line)}
+.md a{color:var(--accent);text-decoration:underline;text-decoration-color:color-mix(in oklab,var(--accent) 35%,transparent);text-underline-offset:2px}
+@media (hover:hover){.md a:hover{text-decoration-color:currentColor}}
+/* pre-wrap here, not inherited: double spaces in inline code survive and a long identifier still wraps */
+.md code{padding:1px 5px;border-radius:var(--r0);background:var(--panel-3);color:var(--ink);font:var(--f-code);white-space:pre-wrap;word-break:break-word}
+
+/* a fenced block: a head with its language and copy, then code that scrolls sideways instead of wrapping */
+.md-code{border:1px solid var(--line);border-radius:var(--r2);background:var(--panel-2);overflow:hidden}
+.md-code-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);min-height:32px;padding:0 var(--s1) 0 var(--s3);border-bottom:1px solid var(--line);font:var(--f-xs);font-family:var(--mono);color:var(--ink-3)}
+.md pre{margin:0;padding:10px 12px;overflow-x:auto;white-space:pre;font:var(--f-code);color:var(--ink-2)}
+.md pre code{padding:0;border-radius:0;background:transparent;font:inherit;color:inherit;white-space:inherit;word-break:normal}
+.msg[data-speaker=human] .md-code{background:var(--panel)}
+
+.md-table-wrap{max-width:100%;overflow-x:auto;border:1px solid var(--line);border-radius:var(--r1)}
+.md-table-wrap table{width:max-content;min-width:100%;border-collapse:collapse;font:var(--f-md)}
+.md-table-wrap th,.md-table-wrap td{padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.md-table-wrap th{font-weight:600;background:var(--panel-2)}
+.md-table-wrap tr:last-child td{border-bottom:0}
+/* a phone column is too narrow for one-line cells: they wrap between words, and only a table whose words still cannot fit scrolls */
+@media (max-width:900px){
+  .md-table-wrap table{width:auto}
+  /* anywhere (from .msg-body) and code's break-word count in min-content, so a column could shrink to one letter a line */
+  .md-table-wrap :is(th,td){overflow-wrap:break-word}
+  .md-table-wrap code{word-break:normal}
+}
+.md-task{margin:0 6px 0 0;vertical-align:middle;accent-color:currentColor}
+.md-task-item{list-style:none}

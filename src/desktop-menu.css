@@ -1,0 +1,34 @@
+/* the desktop app's own menu: the brand in the home list's head, a ⋯ in the rail's foot, and one on the pairing card */
+
+.desktop-menu-trigger{display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);flex:none;min-width:0;width:var(--ctl-h);height:var(--ctl-h);padding:0;border:0;border-radius:var(--r1);background:transparent;color:var(--ink-2);font:inherit;cursor:pointer}
+@media (hover:hover){.desktop-menu-trigger:hover{background:var(--hover);color:var(--ink)}}
+.desktop-menu-trigger[aria-expanded=true]{background:var(--sel);color:var(--ink)}
+.desktop-menu-trigger:disabled{opacity:.45;cursor:wait}
+/* in place of .home-brand: the same 22px mark and wordmark, with the hit area reaching 6px past them */
+.home-head>.desktop-menu-trigger.brand{width:auto;flex:0 1 auto;justify-content:flex-start;margin:0 auto 0 -6px;padding:0 6px;color:var(--ink)}
+.desktop-menu-trigger.brand>img{width:22px;height:22px;flex:none;object-fit:contain}
+.desktop-menu-trigger.brand>.wm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.desktop-menu-trigger.brand>.i{width:12px;height:12px;margin-left:-2px;rotate:90deg;color:var(--ink-3)}
+.pair-brand>.desktop-menu-trigger{margin-left:auto}
+
+.desktop-app-menu{position:fixed;z-index:var(--z-menu);display:grid;gap:1px;width:min(228px,calc(100vw - 16px));max-height:calc(100dvh - 16px);overflow:auto;padding:var(--s1);border-radius:var(--r2);background:var(--panel-2);box-shadow:var(--lift);color:var(--ink);font:var(--f-md)}
+.desktop-menu-caption{display:grid;gap:2px;padding:6px 10px 8px;font:var(--f-xs);color:var(--ink-3)}
+.desktop-menu-caption>strong{font:var(--f-sm);font-weight:600;color:var(--ink-2)}
+.desktop-menu-caption>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.desktop-app-menu>[role=menuitem]{display:flex;align-items:center;gap:10px;width:100%;height:32px;padding:0 10px;border:0;border-radius:var(--r1);background:transparent;color:var(--ink-2);font:var(--f-md);text-align:left;cursor:pointer}
+.desktop-app-menu>[role=menuitem]>span{flex:1;min-width:0}
+.desktop-app-menu>[role=menuitem]>.i{flex:none;color:var(--ink-3)}
+.desktop-app-menu>[role=menuitem]:focus-visible{background:var(--hover);color:var(--ink);outline-offset:-2px}
+@media (hover:hover){.desktop-app-menu>[role=menuitem]:hover{background:var(--hover);color:var(--ink)}}
+.desktop-app-menu>[role=menuitem]:disabled{opacity:.45;cursor:wait}
+.desktop-app-menu>.desktop-menu-quit:focus-visible{background:var(--tint-bad);color:var(--bad)}
+.desktop-app-menu>.desktop-menu-quit:focus-visible>.i{color:inherit}
+@media (hover:hover){
+  .desktop-app-menu>.desktop-menu-quit:hover{background:var(--tint-bad);color:var(--bad)}
+  .desktop-app-menu>.desktop-menu-quit:hover>.i{color:inherit}
+}
+.desktop-menu-divider{height:1px;margin:var(--s1) 6px;background:var(--line)}
+.desktop-menu-error{margin:0;padding:6px 10px 4px;font:var(--f-xs);color:var(--bad);overflow-wrap:anywhere}
+
+@media (pointer:coarse){.desktop-app-menu>[role=menuitem]{height:44px}}
+@media (prefers-reduced-motion:no-preference){.desktop-app-menu{animation:menu-in var(--dur-2) var(--ease-out) both;transform-origin:left top}}

@@ -1,0 +1,15 @@
+.paired-invite{display:grid;gap:10px;padding:14px}
+.paired-invite-head{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.paired-invite-head p{flex:1;min-width:180px;margin:0;font:var(--f-sm);color:var(--ink-3)}
+.paired-invite-uri{display:flex;align-items:center;gap:var(--s2);min-width:0;padding:var(--s2) 10px;border:1px solid var(--line);border-radius:var(--r1);background:var(--panel-2)}
+.paired-invite-uri code{flex:1;min-width:0;font:var(--f-code);color:var(--ink-2);overflow-wrap:anywhere}
+.paired-invite-copy{margin:0;font:var(--f-xs);color:var(--ink-3)}
+.paired-name{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2)}
+.paired-sub{display:grid;gap:4px}
+.paired-sas{font:var(--f-lg);font-family:var(--mono);letter-spacing:2px;color:var(--ink)}
+.paired-mode{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s3);padding:14px;border-top:1px solid var(--line)}
+.paired-mode-copy{display:grid;gap:2px;flex:1;min-width:220px}
+.paired-mode-copy b{font:var(--f-md);font-weight:500;color:var(--ink)}
+.paired-mode-copy span{font:var(--f-sm);color:var(--ink-3)}
+.paired-mode-btns{display:flex;gap:var(--s2);flex:none}
+@media (max-width:540px){.paired-invite,.paired-mode{padding:var(--s3)}}

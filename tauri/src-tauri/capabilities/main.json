@@ -1,0 +1,8 @@
+{
+    "$schema": "../gen/schemas/desktop-schema.json",
+    "identifier": "main",
+    "description": "The bundled control panel may raise native notifications, ask the Android app for its push token, open web and mail links in the system browser, quit the app, and answer its mini-app frames' mimiapp:// requests.",
+    "webviews": ["main"],
+    "local": true,
+    "permissions": ["allow-notify", "allow-push-token", "allow-quit-app", "allow-open-link", "allow-apps-attach", "allow-app-body", "allow-app-respond"]
+}

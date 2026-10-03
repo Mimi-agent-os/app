@@ -1,0 +1,31 @@
+/* the agent page's Interfaces tab: a toolbar, then the launched interface filling the rest */
+
+.interfaces-tab{display:flex;flex:1;flex-direction:column;gap:var(--s3);min-width:0;min-height:0;padding:var(--s4) var(--s5);overflow:auto}
+.interfaces-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--s3);flex:none;min-width:0;padding-bottom:var(--s3);border-bottom:1px solid var(--line)}
+.interfaces-heading{display:grid;gap:2px;flex:1;min-width:0}
+.interfaces-heading>span{font:var(--f-xs);color:var(--ink-3);overflow-wrap:anywhere}
+.interfaces-heading h2{margin:0;font:var(--f-body);font-weight:600;letter-spacing:var(--track-tight);color:var(--ink);overflow-wrap:anywhere}
+.interfaces-tools{display:flex;align-items:flex-end;justify-content:flex-end;flex-wrap:wrap;gap:10px;min-width:0;max-width:100%}
+.interfaces-tools>.btn{flex:none}
+.interfaces-app-choice{display:grid;gap:4px;min-width:0;font:var(--f-xs);color:var(--ink-3)}
+.interfaces-app-choice select{max-width:230px;min-width:0;height:var(--ctl-h-sm);font:var(--f-sm)}
+/* page switcher: the segmented control's shape, but it scrolls sideways when an interface has many pages */
+.interfaces-pages{display:flex;gap:2px;flex-shrink:0;width:fit-content;max-width:100%;padding:2px;overflow-x:auto;border-radius:var(--r1);background:var(--panel-2)}
+.interfaces-pages>button{flex:none;max-width:260px;height:var(--ctl-h-sm);padding:0 10px;border:0;border-radius:var(--r0);background:transparent;color:var(--ink-3);font:var(--f-sm);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+@media (hover:hover){.interfaces-pages>button:hover{color:var(--ink-2)}}
+.interfaces-pages>button.on{background:var(--panel);color:var(--ink)}
+.interfaces-notice{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2);margin:0;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r1);font:var(--f-sm);color:var(--ink-3)}
+.interfaces-page{display:flex;flex-direction:column;flex:1 0 auto;gap:var(--s2);min-width:0;min-height:320px}
+.interfaces-page[hidden]{display:none}
+.interfaces-page-actions{display:flex;justify-content:flex-end;flex:none}
+.interfaces-frame{display:block;flex:1;width:100%;min-width:0;min-height:280px;border:1px solid var(--line);border-radius:var(--r2);background:var(--panel)}
+.interfaces-skel{flex:1;width:100%;height:auto;min-height:280px;border-radius:var(--r2)}
+
+@media (max-width:900px){
+  .interfaces-tab{gap:10px;padding:var(--s3) var(--s4)}
+  .interfaces-toolbar{gap:10px;padding-bottom:10px}
+  .interfaces-tools{gap:6px}
+  .interfaces-app-choice select{max-width:min(230px,calc(100vw - 52px))}
+  .interfaces-frame,.interfaces-skel{min-height:240px}
+}
+@media (pointer:coarse){.interfaces-app-choice select{font-size:16px}}

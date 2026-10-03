@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- 'unsafe-inline' runs the theme script below and the dev server's refresh preamble; frame-src keeps every frame on the control panel or a mini-app's own mimiapp: origin -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self' ws: wss: http: https: ipc:; frame-src 'self' mimiapp:; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="dark light">
+<!-- mirrors --bg in styles.css; theme.ts rewrites it from the computed token -->
+<meta name="theme-color" content="#0c0c0f">
+<!-- before any stylesheet, so the first paint is already in the right theme; the key mirrors THEME_KEY in shared.ts -->
+<script>
+    (function () {
+        var stored = null;
+        try { stored = localStorage.getItem("mimi-os:theme"); } catch (e) {}
+        var light = stored === "light" || (stored !== "dark" && matchMedia("(prefers-color-scheme: light)").matches);
+        document.documentElement.dataset.theme = light ? "light" : "dark";
+    })();
+</script>
+<title>mimi-os</title>
+<link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg">
+<link rel="icon" type="image/png" href="%BASE_URL%favicon.png">
+<link rel="apple-touch-icon" href="%BASE_URL%apple-touch-icon.png">
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

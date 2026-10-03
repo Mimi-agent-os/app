@@ -1,0 +1,325 @@
+/* the visual system: tokens, primitives, overlays and motion; every other stylesheet builds on these names */
+
+/* ── fonts: bundled, so the desktop and Android shells (font-src 'self') render them; @fontsource 5.3.0, OFL (assets/fonts) ── */
+
+@font-face{font-family:'Public Sans';font-style:normal;font-weight:400;font-display:swap;src:url(./assets/fonts/public-sans-latin-400-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Public Sans';font-style:normal;font-weight:400;font-display:swap;src:url(./assets/fonts/public-sans-latin-ext-400-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'Public Sans';font-style:normal;font-weight:500;font-display:swap;src:url(./assets/fonts/public-sans-latin-500-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Public Sans';font-style:normal;font-weight:500;font-display:swap;src:url(./assets/fonts/public-sans-latin-ext-500-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'Public Sans';font-style:normal;font-weight:600;font-display:swap;src:url(./assets/fonts/public-sans-latin-600-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Public Sans';font-style:normal;font-weight:600;font-display:swap;src:url(./assets/fonts/public-sans-latin-ext-600-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url(./assets/fonts/ibm-plex-mono-latin-400-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url(./assets/fonts/ibm-plex-mono-latin-ext-400-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url(./assets/fonts/ibm-plex-mono-cyrillic-400-normal.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:swap;src:url(./assets/fonts/ibm-plex-mono-latin-500-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:swap;src:url(./assets/fonts/ibm-plex-mono-latin-ext-500-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:swap;src:url(./assets/fonts/ibm-plex-mono-cyrillic-500-normal.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:'Quicksand';font-style:normal;font-weight:600;font-display:swap;src:url(./assets/fonts/quicksand-latin-600-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Quicksand';font-style:normal;font-weight:600;font-display:swap;src:url(./assets/fonts/quicksand-latin-ext-600-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+
+/* ── tokens ────────────────────────────────────────────────────────────────── */
+
+:root{
+  color-scheme:dark;
+  /* surfaces, darkest to lightest */
+  --bg:#0c0c0f;        /* ground: home list, rail, phone Home, index.html theme-color */
+  --panel:#111115;     /* the content pane */
+  --panel-2:#18181d;   /* raised inside the pane: composer, your message, menus, inputs, gate */
+  --panel-3:#202027;   /* agent mark, count badge, inline code */
+  --line:#232329;      /* hairlines */
+  --line-2:#303038;    /* control borders, menu ring */
+  --ink:#ececef; --ink-2:#a5a5b0; --ink-3:#80808b;   /* ink-3 ≥ 4.5:1 on --panel-2 */
+  --accent:oklch(.9 .075 163); --accent-ink:#0c0c0f;
+  --good:oklch(.76 .11 155); --warn:oklch(.79 .12 78); --bad:oklch(.71 .15 22);
+  --tint-accent:color-mix(in oklab,var(--accent) 14%,transparent);
+  --tint-good:color-mix(in oklab,var(--good) 14%,transparent);
+  --tint-warn:color-mix(in oklab,var(--warn) 14%,transparent);
+  --tint-bad:color-mix(in oklab,var(--bad) 14%,transparent);
+  --hover:color-mix(in oklab,var(--ink) 5%,transparent);
+  --sel:color-mix(in oklab,var(--ink) 9%,transparent);
+  --focus:var(--accent);
+  --scrim:color-mix(in oklab,var(--bg) 70%,transparent);
+  --lift:0 0 0 1px var(--line-2),0 16px 40px -16px rgb(0 0 0/.55);   /* floating layers only */
+
+  --sans:'Public Sans',ui-sans-serif,system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --brand:Quicksand,var(--sans);            /* the wordmark only */
+  --f-xs:400 11px/16px var(--sans);
+  --f-sm:400 12.5px/18px var(--sans);
+  --f-md:400 13.5px/20px var(--sans);
+  --f-body:400 15px/24px var(--sans);
+  --f-lg:600 17px/24px var(--sans);
+  --f-xl:600 22px/28px var(--sans);
+  --f-code:400 12.5px/19px var(--mono);
+  --track-tight:-.012em;
+
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+  --r0:4px; --r1:6px; --r2:10px; --r3:12px; --pill:999px;
+
+  --ctl-h:32px; --ctl-h-sm:26px; --row-h:32px; --head-h:52px;
+  --side-w:264px; --rail-w:56px; --chat-w:760px; --page-w:880px;
+
+  --dur-1:120ms; --dur-2:160ms; --dur-3:220ms;
+  --ease-out:cubic-bezier(.16,1,.3,1);
+  --ease-in:cubic-bezier(.4,0,1,1);
+  --ease-move:cubic-bezier(.2,0,0,1);
+
+  --z-sheet:30; --z-menu:40; --z-overlay:50; --z-palette:51; --z-dialog:60; --z-toast:70;
+
+  /* the safe area: the browser's own, or the system bars and cutout the Android shell reports (main.tsx), which older WebViews leave at 0 */
+  --in-t:max(env(safe-area-inset-top),var(--sys-t,0px)); --in-r:max(env(safe-area-inset-right),var(--sys-r,0px));
+  --in-b:max(env(safe-area-inset-bottom),var(--sys-b,0px)); --in-l:max(env(safe-area-inset-left),var(--sys-l,0px));
+}
+:root[data-theme=light]{
+  color-scheme:light;
+  --bg:#f3f3f5; --panel:#fbfbfc; --panel-2:#f0f0f3; --panel-3:#e7e7ec;
+  --line:#e3e3e9; --line-2:#d0d0d8;
+  --ink:#17171c; --ink-2:#50505b; --ink-3:#6b6b76;
+  --accent:oklch(.52 .1 163); --accent-ink:#fbfbfc;
+  --good:oklch(.5 .12 155); --warn:oklch(.5 .12 68); --bad:oklch(.53 .17 25);   /* warn ≥ 4.5:1 on --tint-warn too */
+  --hover:color-mix(in oklab,var(--ink) 4%,transparent);
+  --sel:color-mix(in oklab,var(--ink) 7%,transparent);
+  --scrim:color-mix(in oklab,var(--ink) 18%,transparent);
+  --lift:0 0 0 1px var(--line-2),0 16px 40px -18px rgb(20 20 35/.22);
+}
+/* a phone: touch-sized controls and a restrained scale; text fields stay at 16px below, or iOS zooms on focus */
+@media (pointer:coarse){:root{
+  --ctl-h:44px; --ctl-h-sm:36px; --row-h:44px; --head-h:56px;
+  --f-xs:400 11.5px/16px var(--sans); --f-sm:400 13px/18px var(--sans); --f-md:400 14.5px/20px var(--sans);
+  --f-body:400 15px/23px var(--sans); --f-lg:600 16px/22px var(--sans); --f-xl:600 20px/26px var(--sans);
+  --f-code:400 12.5px/18px var(--mono);
+}}
+
+/* ── base ──────────────────────────────────────────────────────────────────── */
+
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:var(--f-md);-webkit-font-smoothing:antialiased}
+:where(button,input,textarea,select){font:inherit;color:inherit}
+/* the scale stops at 600: bold, headings and table heads never fall back to the browser's 700 */
+:where(b,strong,h1,h2,h3,h4,th){font-weight:600}
+button,input,textarea,select{-webkit-tap-highlight-color:transparent}
+::placeholder{color:var(--ink-3)}
+::selection{background:color-mix(in oklab,var(--accent) 30%,transparent);color:inherit}
+*{scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+
+:where(button,a,input,textarea,select,summary,[tabindex]):focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+:where(.home-scroll,.chat-list,.palette-results,.agent-chats,.tabs,.interfaces-pages) :focus-visible{outline-offset:-2px}
+
+.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.i.sm{width:14px;height:14px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.num{font-variant-numeric:tabular-nums}
+.wm{font:600 16px/1 var(--brand);letter-spacing:-.01em}
+.eyebrow{font:var(--f-xs);font-weight:500;color:var(--ink-3)}
+.dim{color:var(--ink-2)} .dim3{color:var(--ink-3)}
+.t-xs{font:var(--f-xs)} .t-sm{font:var(--f-sm)}
+/* read by a screen reader, not drawn */
+.vh{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* ── buttons: filled send, filled ink, outline, quiet ──────────────────────── */
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:var(--ctl-h);padding:0 12px;border:1px solid var(--line-2);border-radius:var(--r1);background:transparent;color:var(--ink);font:var(--f-md);font-weight:500;white-space:nowrap;cursor:pointer}
+.btn.sm{height:var(--ctl-h-sm);padding:0 9px;font:var(--f-sm);font-weight:500}
+.btn.quiet{border-color:transparent;color:var(--ink-2)}
+.btn.icon{width:var(--ctl-h);padding:0;border-color:transparent;color:var(--ink-2)} .btn.sm.icon{width:var(--ctl-h-sm)}
+.btn.primary{background:var(--ink);border-color:transparent;color:var(--panel);font-weight:600}
+.btn.send{background:var(--accent);border-color:transparent;color:var(--accent-ink);font-weight:600}
+.btn.accent{color:var(--accent);border-color:color-mix(in oklab,var(--accent) 40%,var(--line-2))}
+.btn.danger{color:var(--bad);border-color:color-mix(in oklab,var(--bad) 40%,var(--line-2))}
+/* a tap leaves no hover behind: every hover tint is for a pointer that hovers */
+@media (hover:hover){
+  .btn:hover{background:var(--hover)} .btn.quiet:hover,.btn.icon:hover{color:var(--ink)}
+  .btn.primary:hover{background:color-mix(in oklab,var(--ink) 88%,var(--panel))}
+  .btn.send:hover{background:color-mix(in oklab,var(--accent) 90%,var(--ink))}
+  .btn.danger:hover{background:var(--tint-bad)}
+}
+/* after the hovers, at their weight, so a mouse press shows it too; the filled buttons keep their fill */
+.btn:active:where(:not(.primary,.send)){background:var(--sel)}
+.btn[disabled]{opacity:.45;pointer-events:none}
+
+/* ── inputs and keys ───────────────────────────────────────────────────────── */
+
+input[type=text],input[type=search],input[type=password],select{height:var(--ctl-h);padding:0 10px;border:1px solid var(--line);border-radius:var(--r1);background:var(--panel-2);color:var(--ink);font:var(--f-md)}
+@media (hover:hover){input:hover,select:hover{border-color:var(--line-2)}}
+/* Safari draws a search field as a pill unless its native look is dropped */
+input[type=search]{appearance:none}
+select{max-width:100%}
+input[type=checkbox],input[type=radio]{accent-color:var(--ink)}
+@media (pointer:coarse){input[type=text],input[type=search],input[type=password],textarea,select{font-size:16px}}
+kbd{display:inline-flex;align-items:center;height:18px;padding:0 5px;border:1px solid var(--line-2);border-radius:var(--r0);font:500 11px/1 var(--mono);color:var(--ink-3)}
+@media (pointer:coarse){kbd,.composer-hint{display:none}}
+
+/* ── status, counts and marks: color never carries a state alone, a word sits beside it ── */
+
+.pill{display:inline-flex;align-items:center;gap:5px;flex:none;height:20px;padding:0 7px;border-radius:var(--pill);font:600 11px/1 var(--sans);white-space:nowrap;color:var(--ink-2);background:var(--panel-3)}
+.pill.ok{color:var(--good);background:var(--tint-good)}
+.pill.warn{color:var(--warn);background:var(--tint-warn)}
+.pill.bad{color:var(--bad);background:var(--tint-bad)}
+.pill.info{color:var(--ink);background:var(--sel)}
+.count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:var(--pill);background:var(--panel-3);color:var(--ink-2);font:500 11px/1 var(--mono)}
+.count.warn{background:var(--tint-warn);color:var(--warn)}
+.dot{width:6px;height:6px;border-radius:50%;flex:none;background:var(--ink-3)}
+.dot.ok{background:var(--good)} .dot.degraded,.dot.gate,.dot[data-tone=warn]{background:var(--warn)}
+.dot.down{background:var(--bad)} .dot.run,.dot[data-tone=accent]{background:var(--accent)}
+.dot.paused{background:transparent;border:1px solid var(--ink-2)} .dot[data-tone=mute]{background:var(--ink-3)}
+.state{font:var(--f-sm);white-space:nowrap;color:var(--ink-3)}
+.state[data-tone=warn]{color:var(--warn)} .state[data-tone=accent]{color:var(--accent)}
+.countdown{font:500 12px/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--warn)}
+.agent-mark{display:inline-grid;place-items:center;width:20px;height:20px;flex:none;overflow:hidden;border-radius:var(--r0);background:var(--panel-3);color:var(--ink-2);font:600 11px/1 var(--sans)}
+.agent-mark img{display:block;width:100%;height:100%;object-fit:cover}
+.agent-mark.lg{width:32px;height:32px;border-radius:var(--r1);font-size:14px}
+.agent-mark.xl{width:44px;height:44px;border-radius:var(--r2);font-size:18px}
+.metric{display:flex;align-items:baseline;gap:6px}
+.metric b{font:var(--f-xl);letter-spacing:var(--track-tight);font-variant-numeric:tabular-nums}
+.metric span{font:var(--f-sm);color:var(--ink-3)}
+
+/* ── empty, error and loading ──────────────────────────────────────────────── */
+
+.empty{display:grid;justify-items:center;gap:var(--s2);min-width:0;padding:var(--s6) var(--s4);text-align:center;font:var(--f-md);color:var(--ink-3);overflow-wrap:anywhere}
+.empty h3{margin:0;font:var(--f-md);font-weight:600;color:var(--ink)}
+.empty-copy{max-width:52ch;min-width:0;text-wrap:pretty}
+.empty-icon{display:inline-flex;color:var(--ink-3)} .empty-icon .i{width:24px;height:24px}
+.empty-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:var(--s2);margin-top:var(--s1)}
+.err{padding:10px 12px;border:1px solid color-mix(in oklab,var(--bad) 35%,var(--line));border-radius:var(--r1);color:var(--bad);font:var(--f-sm);overflow-wrap:anywhere}
+.skel{display:block;height:12px;border-radius:var(--r0);background:var(--hover)}
+.skel.inline{display:inline-block;vertical-align:middle}
+.skel.round{border-radius:var(--r1)}
+/* a delay rather than motion, so it stays under reduced motion: a load faster than 150ms never shows the skeleton */
+.skel-wait{animation:fade-in var(--dur-2) var(--ease-out) 150ms both}
+
+/* ── lists and disclosures ─────────────────────────────────────────────────── */
+
+.item{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;min-width:0;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r2);background:var(--panel)}
+.item .meta{display:flex;align-items:center;gap:6px;font:var(--f-xs);color:var(--ink-3)}
+.item .ttl{font:var(--f-md);font-weight:500;text-wrap:pretty}
+.item .acts{display:flex;gap:6px}
+.seg{display:inline-flex;height:var(--ctl-h-sm);gap:2px;padding:2px;border-radius:var(--r1);background:var(--panel-2)}
+.seg button{display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:none;border:0;border-radius:var(--r0);background:transparent;padding:0 10px;font:var(--f-sm);font-weight:500;white-space:nowrap;color:var(--ink-3);cursor:pointer}
+@media (hover:hover){.seg button:hover{color:var(--ink-2)}}
+.seg button.on{background:var(--panel);color:var(--ink)}
+.disclose{min-width:0;margin:0 0 var(--s2);border:1px solid var(--line);border-radius:var(--r1);overflow:hidden}
+.disclose>summary{display:flex;align-items:center;gap:var(--s2);padding:6px 10px;font:var(--f-sm);color:var(--ink-2);list-style:none;cursor:pointer}
+.disclose>summary::-webkit-details-marker{display:none}
+.disclose>summary::before{content:"▸";font-size:9px;color:var(--ink-3)}
+.disclose[open]>summary::before{content:"▾"}
+@media (hover:hover){.disclose>summary:hover{color:var(--ink)}}
+.disclose pre{margin:0;padding:0 10px 10px;font:var(--f-code);color:var(--ink-2);white-space:pre-wrap;word-break:break-word;overflow:auto}
+
+/* ── palette ───────────────────────────────────────────────────────────────── */
+
+.overlay{position:fixed;inset:0;z-index:var(--z-overlay);background:var(--scrim)}
+.palette{position:fixed;top:min(12vh,96px);left:0;right:0;z-index:var(--z-palette);display:flex;flex-direction:column;width:min(600px,100vw - 24px);max-height:calc(100dvh - min(12vh,96px) - 24px);margin-inline:auto;border-radius:var(--r2);background:var(--panel-2);box-shadow:var(--lift);overflow:hidden}
+.palette input[type=text]{flex:none;width:100%;height:48px;padding:0 var(--s4);border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;font:var(--f-body)}
+.palette input[type=text]:focus-visible{outline:none}
+.palette-results{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:var(--s1) 6px var(--s2)}
+.grp{padding:10px 10px 4px;font:var(--f-xs);font-weight:500;color:var(--ink-3)}
+.opt{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:var(--r1);color:var(--ink-2);cursor:pointer}
+.opt.on{background:var(--sel);color:var(--ink)}
+.opt .i{color:var(--ink-3)} .opt.on .i{color:var(--ink-2)}
+/* a status dot sits in the same 14px slot as an icon, so every label starts at one edge */
+.opt>.dot{margin:0 4px}
+.opt-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.opt-detail{flex:0 1 auto;min-width:0;max-width:45%;margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--f-xs);color:var(--ink-3)}
+.opt .k{flex:none;margin-left:auto} .opt-detail+.k{margin-left:0}
+.palette-footer{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s4);padding:var(--s2) var(--s4);border-top:1px solid var(--line);font:var(--f-xs);color:var(--ink-3)}
+@media (pointer:coarse){.opt{height:var(--row-h)} .palette input[type=text]{font-size:16px}}
+@media (max-width:900px){
+  .palette{top:var(--in-t);width:100%;max-height:calc(var(--vvh,100dvh) - var(--in-t) - var(--s6));border-radius:0 0 var(--r2) var(--r2)}
+  .palette-footer{display:none}
+}
+
+/* ── toast ─────────────────────────────────────────────────────────────────── */
+
+.toast{position:fixed;left:0;right:0;bottom:max(24px,calc(var(--in-b) + 12px));z-index:var(--z-toast);display:flex;align-items:center;gap:var(--s3);width:max-content;max-width:calc(100vw - 28px);margin-inline:auto;padding:10px 14px;border-radius:var(--r2);background:var(--panel-2);box-shadow:var(--lift);font:var(--f-sm);overflow-wrap:anywhere;opacity:0;translate:0 8px;pointer-events:none}
+.toast.on{opacity:1;translate:0 0;pointer-events:auto}
+.toast .u{flex:none;min-height:24px;padding:0;border:0;background:none;color:var(--accent);font:inherit;font-weight:600;cursor:pointer}
+/* under the phone header, never over its ‹ and ⋯ */
+@media (max-width:900px){.toast{top:calc(var(--in-t) + var(--head-h) + var(--s2));bottom:auto;translate:0 -8px}}
+
+/* ── pairing: the first screen of a device that has no session ─────────────── */
+
+.pairgate{position:fixed;inset:0;width:100%;max-width:none;height:var(--vvh,100dvh);max-height:none;margin:0;padding:max(var(--s5),var(--in-t)) max(var(--s5),var(--in-r)) max(var(--s5),var(--in-b)) max(var(--s5),var(--in-l));border:0;background:var(--bg);color:var(--ink);overflow-y:auto}
+.pairgate[open]{display:grid;grid-template-columns:minmax(0,1fr)}
+.pairgate::backdrop{background:var(--bg)}
+/* auto margins, not place-items: a card taller than the screen (the keyboard up) overflows downward, where it still scrolls */
+.paircard{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--s4);width:min(440px,100%);margin:auto;padding:var(--s6);border:1px solid var(--line);border-radius:var(--r2);background:var(--panel)}
+.pair-brand{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.pair-brand img{width:32px;height:32px}
+.pair-brand .wm{font-size:20px}
+.paircard h2{margin:0;font:var(--f-lg);letter-spacing:var(--track-tight)}
+.paircard p{margin:0;font:var(--f-md);color:var(--ink-2);overflow-wrap:anywhere}
+.paircard label{display:grid;gap:6px;font:var(--f-sm);color:var(--ink-2)}
+.paircard input{width:100%;height:40px}
+.paircard summary{padding:var(--s2) 0;font:var(--f-sm);font-weight:500;color:var(--ink-2);cursor:pointer}
+.paircard details[open]{display:grid;gap:10px}
+.paircard .pair-code{font:500 28px/1.2 var(--mono);letter-spacing:2px;color:var(--ink)}
+.paircard .pair-note{font:var(--f-sm);color:var(--ink-3)}
+/* the URLs that reach the paired gateway (connection-list.tsx): Settings > Connection, and this gate while a paired device dials */
+.conn-urls{display:grid;grid-template-columns:minmax(0,1fr);gap:6px}
+.conn-url{display:flex;align-items:center;gap:var(--s2);min-height:var(--ctl-h-sm)}
+.conn-url>.mono{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--f-sm);font-family:var(--mono)}
+.conn-add{display:flex;gap:var(--s2);padding-top:var(--s1)}
+.conn-add input[type=text]{flex:1;min-width:0;height:var(--ctl-h-sm);font-family:var(--mono)}
+.pair-form{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;padding-top:6px}
+.pair-acts{display:flex;flex-wrap:wrap;justify-content:space-between;gap:var(--s2)}
+/* a phone gets the whole screen, not a card inside a padded gate; a URL takes its own line, never ellipsized */
+@media (max-width:540px){
+    .pairgate{padding:0}
+    .paircard{width:100%;min-height:100%;margin:0;align-content:start;gap:var(--s3);padding:calc(var(--in-t) + var(--s5)) var(--s4) calc(var(--in-b) + var(--s5));border:0;border-radius:0;background:var(--bg)}
+    .conn-url{flex-wrap:wrap;row-gap:var(--s1)}
+    .conn-url>.mono{flex-basis:100%;white-space:normal;overflow-wrap:anywhere}
+}
+
+/* ── motion: transform and opacity only, 120 to 220ms, decelerating ────────── */
+
+@keyframes fade-in{from{opacity:0}}
+@keyframes fade-out{to{opacity:0}}
+@keyframes rise-in{from{opacity:0;translate:0 6px}}
+@keyframes menu-in{from{opacity:0;scale:.97}}
+@keyframes sheet-in{from{translate:0 100%}}
+@keyframes push-in{from{opacity:0;translate:28px 0}}
+@keyframes push-out{to{opacity:0;translate:-12px 0}}
+@keyframes pop-in{from{opacity:0;translate:-12px 0}}
+@keyframes pop-out{to{opacity:0;translate:28px 0}}
+@keyframes pulse{50%{opacity:.3}}
+
+/* the overlay never takes a click, and the root snapshot swaps at once: only the pane moves, the sidebar never does */
+::view-transition{pointer-events:none}
+::view-transition-old(root){display:none}
+::view-transition-new(root),::view-transition-group(root){animation:none}
+::view-transition-group(pane),::view-transition-group(screen){animation:none}
+/* the toast floats above the pane, so it is captured on its own and stays put through a route change */
+::view-transition-old(toast){display:none}
+::view-transition-new(toast),::view-transition-group(toast){animation:none}
+
+@media (prefers-reduced-motion:no-preference){
+  .work{view-transition-name:pane}
+  .toast{view-transition-name:toast}
+  ::view-transition-old(pane){animation:fade-out var(--dur-1) var(--ease-in) both}
+  ::view-transition-new(pane){animation:fade-in var(--dur-2) var(--ease-out) both}
+  /* no View Transitions API: motion.ts holds data-nav for 240ms after a push or a pop, and only that window animates */
+  html[data-nav]:not([data-vt]) .work>*{animation:fade-in var(--dur-2) var(--ease-out) both}
+  @media (max-width:900px){
+    .side,.work{view-transition-name:screen}
+    html[data-nav=forward]::view-transition-new(screen){animation:push-in var(--dur-3) var(--ease-out) both}
+    html[data-nav=forward]::view-transition-old(screen){animation:push-out var(--dur-2) var(--ease-in) both}
+    html[data-nav=back]::view-transition-new(screen){animation:pop-in var(--dur-3) var(--ease-out) both}
+    html[data-nav=back]::view-transition-old(screen){animation:pop-out var(--dur-2) var(--ease-in) both}
+    html[data-nav=forward]:not([data-vt]) .work>*{animation:push-in var(--dur-3) var(--ease-out) both}
+    html[data-nav=back]:not([data-vt]) :is(.work,.side)>*{animation:pop-in var(--dur-3) var(--ease-out) both}
+  }
+
+  .enter{animation:fade-in var(--dur-2) var(--ease-out) both}
+  .overlay{animation:fade-in var(--dur-1) var(--ease-out) both}
+  .palette{animation:menu-in var(--dur-2) var(--ease-out) both;transform-origin:top center}
+  .mback{animation:fade-in var(--dur-1) var(--ease-out) both}
+  .modal{animation:menu-in var(--dur-2) var(--ease-out) both}
+  .toast{transition:opacity var(--dur-2) var(--ease-out),translate var(--dur-2) var(--ease-out)}
+}
+
+/* the backstop: durations collapse to .01ms, not 0, so every animationend and transitionend still fires */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}

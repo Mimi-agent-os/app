@@ -1,0 +1,18 @@
+.agent-invites{display:grid;gap:var(--s4);min-width:0}
+.agent-invites .pnlh{gap:var(--s2);min-height:48px;overflow-wrap:anywhere}
+.agent-invites .pnlh>span{flex:none}
+.agent-invite-intro{margin:0;padding:14px 14px 10px;font:var(--f-sm);color:var(--ink-3)}
+.agent-invite-form{display:grid;gap:10px;margin:4px 14px 14px;padding:14px;border:1px solid var(--line);border-radius:var(--r2);background:var(--panel-2)}
+.agent-invite-form label{display:grid;gap:6px;min-width:0;font:var(--f-sm);color:var(--ink-2)}
+.agent-invite-form input{width:100%;min-width:0}
+.agent-invite-form-actions{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2)}
+.agent-invite-created{display:grid;gap:10px;padding:14px}
+.agent-invite-uri{display:flex;align-items:center;gap:var(--s2);min-width:0;padding:var(--s2) 10px;border:1px solid var(--line);border-radius:var(--r1);background:var(--panel-2)}
+.agent-invite-uri code{flex:1;min-width:0;font:var(--f-code);color:var(--ink-2);overflow-wrap:anywhere}
+.agent-invite-help{margin:0;font:var(--f-xs);color:var(--ink-3)}
+@media (max-width:540px){
+  .agent-invites .pnlh{padding:var(--s3)}
+  .agent-invite-intro{padding:var(--s3) var(--s3) var(--s2)}
+  .agent-invite-form{margin:4px var(--s3) var(--s3);padding:var(--s3)}
+  .agent-invite-created{padding:var(--s3)}
+}

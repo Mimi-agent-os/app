@@ -1,0 +1,31 @@
+.inbox-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--s3)}
+.inbox-head h2{margin:0 0 2px;font:var(--f-body);font-weight:600}
+.inbox-head .dim3{font:var(--f-sm)}
+.inbox-actions{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2)}
+.inbox-activity-filter{display:flex;align-items:center;gap:6px;font:var(--f-sm);color:var(--ink-2)}
+.inbox-preview{margin:0;font:var(--f-md);overflow-wrap:anywhere}
+.inbox-body{font:var(--f-md)}
+.inbox-row.unread .ttl{font-weight:600}
+.dot.unread{background:var(--ink)}
+.inbox-note{padding:10px 12px;font:var(--f-sm);color:var(--ink-3)}
+.inbox-note summary{display:flex;align-items:center;gap:var(--s2);width:fit-content;color:var(--ink-2);list-style:none;cursor:pointer}
+.inbox-note summary::-webkit-details-marker{display:none}
+.inbox-note p{max-width:70ch;margin:var(--s2) 0 0 22px}
+@media (max-width:540px){.inbox-head{align-items:stretch}}
+
+/* approval requests: Inbox and Settings, Health */
+.approvals{display:grid;gap:var(--s3);min-width:0}
+.approvals-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s2)}
+.approvals-head h3{margin:0;font:var(--f-md);font-weight:600}
+.item.approval{gap:var(--s2)}
+.approval-top{display:flex;align-items:flex-start;gap:var(--s2)}
+.approval-what{display:grid;flex:1;min-width:0;font:var(--f-md);overflow-wrap:anywhere}
+.approval-agent{display:flex;align-items:center;gap:6px}
+.approval-review{display:grid;gap:10px;min-width:0;padding-top:10px;border-top:1px solid var(--line)}
+.approval-act{display:grid;gap:6px;min-width:0}
+.approval-act label{display:flex;align-items:center;gap:var(--s2);font:var(--f-sm);overflow-wrap:anywhere}
+.approval-act pre{max-height:220px;margin:0;padding:10px;overflow:auto;border:1px solid var(--line);border-radius:var(--r1);background:var(--bg);font:var(--f-code);white-space:pre-wrap;overflow-wrap:anywhere}
+.approval-error{margin:0;font:var(--f-sm);color:var(--bad);overflow-wrap:anywhere}
+.approval-error>div{margin-top:var(--s2)}
+.approval-btns{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:var(--s2)}
+.approval-review .gate{margin:0}

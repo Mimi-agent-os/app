@@ -1,0 +1,30 @@
+/* ── action menus: a floating list on desktop, a bottom sheet at ≤900px ── */
+
+.menu{position:fixed;left:var(--x);top:var(--y);z-index:var(--z-menu);display:grid;gap:1px;min-width:200px;max-width:min(320px,calc(100vw - 16px));max-height:calc(100dvh - 16px);overflow-y:auto;padding:var(--s1);border-radius:var(--r2);background:var(--panel-2);box-shadow:var(--lift)}
+.menu-item{display:flex;align-items:center;gap:10px;height:32px;padding:0 10px;border:0;border-radius:var(--r1);background:transparent;color:var(--ink-2);font:var(--f-md);text-align:left;white-space:nowrap;cursor:pointer}
+.menu-item>span:first-of-type{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.menu-item:focus-visible{background:var(--hover);color:var(--ink);outline-offset:-2px}
+.menu-item[data-danger]:focus-visible{background:var(--tint-bad);color:var(--bad)}
+@media (hover:hover){
+  .menu-item:hover{background:var(--hover);color:var(--ink)}
+  .menu-item[data-danger]:hover{background:var(--tint-bad);color:var(--bad)}
+}
+@media (hover:none){.menu-item:active{background:var(--hover)}}
+.menu-item[disabled]{opacity:.45;pointer-events:none}
+.menu-detail{margin-left:auto;padding-left:var(--s3);font:var(--f-xs);color:var(--ink-3)}
+.menu-sep{height:1px;margin:var(--s1) 6px;border:0;background:var(--line)}
+.menu-scrim{display:none}
+
+@media (max-width:900px){
+  .menu-scrim{display:block;position:fixed;inset:0;z-index:var(--z-menu);background:var(--scrim)}
+  .menu{left:var(--s2);right:var(--s2);top:auto;bottom:max(var(--s2),var(--in-b));max-width:none;padding:var(--s2);z-index:calc(var(--z-menu) + 1)}
+  .menu-item{height:44px}
+}
+
+@media (prefers-reduced-motion:no-preference){
+  .menu{animation:menu-in var(--dur-2) var(--ease-out) both}
+  @media (max-width:900px){
+    .menu{animation:sheet-in var(--dur-3) var(--ease-out) both}
+    .menu-scrim{animation:fade-in var(--dur-2) var(--ease-out) both}
+  }
+}

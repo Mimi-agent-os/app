@@ -1,0 +1,45 @@
+{
+    "name": "mimi-ui",
+    "version": "0.1.0",
+    "private": true,
+    "description": "mimi-os app: the React control panel that the desktop and Android shells bundle",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/Mimi-agent-os/app.git"
+    },
+    "homepage": "https://github.com/Mimi-agent-os/app",
+    "bugs": "https://github.com/Mimi-agent-os/app/issues",
+    "type": "module",
+    "license": "Apache-2.0",
+    "engines": {
+        "node": ">=24"
+    },
+    "scripts": {
+        "check": "tsc --noEmit",
+        "test": "node --test \"test/**/*.test.ts\"",
+        "build": "vite build",
+        "build:ui": "vite build --outDir dist --emptyOutDir",
+        "dev": "vite",
+        "desktop:doctor": "node scripts/desktop.mjs doctor",
+        "desktop:dev": "node scripts/desktop.mjs dev",
+        "desktop:check": "node scripts/desktop.mjs check",
+        "desktop:build:test": "node scripts/desktop.mjs test-build",
+        "desktop:build": "node scripts/desktop.mjs build",
+        "desktop:icons": "node scripts/desktop.mjs icons",
+        "android:apk": "node scripts/desktop.mjs android-apk",
+        "android:release": "node scripts/desktop.mjs android-release"
+    },
+    "dependencies": {
+        "@mimi-os/protocol": "link:../protocol",
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8"
+    },
+    "devDependencies": {
+        "@types/react": "^19.2.18",
+        "@types/react-dom": "^19.2.4",
+        "@vitejs/plugin-react": "^6.0.5",
+        "typescript": "6.0.3",
+        "vite": "^8.2.1"
+    },
+    "packageManager": "pnpm@10.34.5"
+}

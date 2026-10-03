@@ -1,0 +1,265 @@
+/* ── the chat screen: header, thread, dock ── */
+
+.chat-screen{display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:100%;min-height:0;min-width:0}
+.chat-screen>.thread{grid-area:2/1}
+.chat-screen>.chat-dock{grid-area:3/1}
+
+/* Web: the agent's interface over the thread and the dock; hidden, not unmounted or display:none, they keep the thread's scroll and the draft */
+.chat-web{grid-area:2/1/4/2;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--panel)}
+.chat-web[hidden]{display:none}
+.chat-screen[data-view=web]>:is(.thread,.chat-dock){visibility:hidden}
+.chat-view button{padding:0 8px}
+.head .chat-web-pick{width:auto;max-width:180px;height:var(--ctl-h-sm);padding:0 6px;font:var(--f-sm);text-overflow:ellipsis}
+
+/* header */
+.chat-head .head-title{overflow:visible}
+/* only the title gives way to a long name; the agent link and the state word keep their width */
+.chat-head .head-sub{flex:none}
+.chat-title-text{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* the -6px margin keeps the text on the header edge; max-width gives those 6px back, or a short title ends in an ellipsis */
+.chat-title-btn{max-width:calc(100% + 6px);padding:2px 6px;margin-left:-6px;border:0;border-radius:var(--r1);background:none;color:inherit;font:inherit;letter-spacing:inherit;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:baseline;cursor:text}
+@media (hover:hover){.chat-title-btn:hover{background:var(--hover)}}
+.head .chat-title-input{height:32px;width:min(420px,100%);margin-left:-6px;padding:0 6px;font:var(--f-lg);letter-spacing:var(--track-tight)}
+.head-agent,.agent-pick{display:inline-flex;align-items:center;gap:2px;height:var(--ctl-h-sm);padding:0 6px;border:0;border-radius:var(--r1);background:none;color:var(--ink-2);font:var(--f-sm);font-weight:500;white-space:nowrap;cursor:pointer}
+@media (hover:hover){.head-agent:hover,.agent-pick:hover{background:var(--hover);color:var(--ink)}}
+.head-agent .i,.agent-pick .i{color:var(--ink-3)}
+.head-agent .agent-mark{margin-right:var(--s1)}
+/* squeezed by the state word or the connection line, the agent name ends in an ellipsis and the mark and chevron stay */
+.chat-head .head-agent{min-width:0}
+.head-agent-name{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.head-agent>.agent-mark,.head-agent>.i{flex:none}
+.agent-pick{gap:4px;border:1px solid var(--line-2)}
+.agent-pick b{color:var(--ink);font-weight:500}
+.agent-pick .i{rotate:90deg}
+.agent-pick[aria-disabled]{cursor:default}
+@media (hover:hover){.agent-pick[aria-disabled]:hover{background:none;color:var(--ink-2)}}
+
+/* thread: the side padding centers a --chat-w column, so your messages still pin to its right edge */
+.thread{display:flex;flex-direction:column;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:var(--s5) max(var(--s5),calc((100% - var(--chat-w)) / 2)) var(--s3)}
+.thread>*{flex:none}
+.threadfill{margin-top:auto}
+.thread-past{min-width:0}
+.thread-top{padding:2px 0 var(--s3);text-align:center;font:var(--f-xs);color:var(--ink-3)}
+.thread-top .skel{display:inline-block;vertical-align:middle}
+.thread>.err{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2);margin:0 0 var(--s3)}
+.thread>.err>span{flex:1;min-width:0}
+
+/* messages: agent replies are set as text, your own are a soft block on the right */
+.msg{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;margin:0 0 var(--s5);min-width:0}
+.msg-who{display:flex;align-items:center;gap:var(--s2);min-height:22px;font:var(--f-sm);font-weight:600;color:var(--ink)}
+.msg-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msg-time{font:var(--f-xs);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.msg-actions{margin-left:auto;display:inline-flex;gap:2px}
+.msg-body{min-width:0;font:var(--f-body);color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere;text-wrap:pretty}
+.msg-body>.skel+.skel{margin-top:9px}
+.msg[data-speaker=human]{justify-items:end;margin-left:auto;max-width:min(68ch,85%)}
+.msg[data-speaker=human] .msg-body{padding:10px 14px;border-radius:var(--r2);background:var(--panel-2)}
+.msg[data-speaker=system] .msg-body,.msg[data-speaker=unknown] .msg-body{color:var(--ink-2)}
+.msg-foot{display:flex;align-items:center;gap:var(--s1);margin-top:-2px;font:var(--f-xs);color:var(--ink-3)}
+.msg-actions .btn,.msg-foot .btn{height:22px;padding:0 6px;font:var(--f-xs);font-weight:500}
+@media (pointer:fine){
+  .msg-actions,.msg-foot{opacity:0}
+  .msg:hover :is(.msg-actions,.msg-foot),.msg:focus-within :is(.msg-actions,.msg-foot){opacity:1}
+}
+
+/* one agent turn: its reply, thinking, tools and gate sit 12px apart, and the turn --s5 from the next message */
+.msg-turn{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--s3);margin:0 0 var(--s5);min-width:0}
+.msg-turn:empty{display:none}
+.thread .msg-turn>*{margin:0}
+.thread .msg-turn>.msg[data-speaker=human]{justify-self:end}
+.thread .msg-turn>.chat-genmeta{margin-top:-6px}
+
+/* editing one of your messages in place */
+.msg.msg-edit{width:min(68ch,85%);justify-items:stretch}
+.msg-edit textarea{width:100%;min-height:76px;resize:vertical;padding:10px 14px;border:1px solid var(--line-2);border-radius:var(--r2);background:var(--panel-2);color:var(--ink);font:var(--f-body)}
+.msg-edit-bar{display:flex;align-items:center;gap:var(--s1)}
+.msg-edit-bar>span{margin-right:auto;font:var(--f-xs);color:var(--ink-3)}
+
+/* images sent with a message; a fixed frame, so the thread never jumps while one decodes */
+.chat-images{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:10px;white-space:normal}
+.chat-image{display:grid;place-items:center;width:132px;height:96px;max-width:100%;padding:0;overflow:hidden;border:1px solid var(--line);border-radius:var(--r1);background:var(--panel-2);color:var(--ink-3)}
+.msg[data-speaker=human] .chat-image{background:var(--panel)}
+.chat-image img{display:block;width:100%;height:100%;object-fit:contain;opacity:0}
+.chat-image.ok{cursor:zoom-in}
+.chat-image.ok img{opacity:1}
+
+.dlgback.image-viewer{grid-template-rows:auto minmax(0,1fr);grid-template-columns:minmax(0,1fr);gap:var(--s2);padding:max(var(--s4),var(--in-t)) max(var(--s4),var(--in-r)) max(var(--s4),var(--in-b)) max(var(--s4),var(--in-l));cursor:zoom-out}
+.image-viewer>img{max-width:100%;max-height:100%;background:var(--panel)}
+.image-viewer .btn{background:var(--panel-2)} @media (hover:hover){.image-viewer .btn:hover{background:var(--panel-3)}}
+.image-viewer-close{justify-self:end}
+.image-viewer-bar{display:flex;align-items:center;gap:var(--s2);padding:0 var(--s1);border-radius:var(--r1);background:var(--panel-2);font:var(--f-sm);color:var(--ink-2)}
+.image-viewer-bar .btn:first-child .i{rotate:180deg}
+
+/* thinking, tools, the generation line */
+.chat-thinking{margin:0 0 var(--s3)}
+.chat-thinking>summary{display:flex;align-items:center;gap:6px;width:fit-content;font:var(--f-sm);color:var(--ink-3);cursor:pointer;list-style:none}
+.chat-thinking>summary::-webkit-details-marker{display:none}
+@media (hover:hover){.chat-thinking>summary:hover{color:var(--ink-2)}}
+.chat-thinking[open]>summary .i{rotate:90deg}
+.chat-thinking-body{margin-top:6px;padding:10px 14px;border-radius:var(--r2);background:var(--panel-2);color:var(--ink-2);font:var(--f-sm);max-height:320px;overflow:auto}
+/* minmax(0,1fr): a long tool name or argument must shrink inside the thread, never widen it */
+.chat-tools{display:grid;grid-template-columns:minmax(0,1fr);gap:6px}
+.chat-call{min-width:0;font:var(--f-sm);color:var(--ink-3)}
+.chat-call>summary{display:flex;align-items:center;gap:var(--s2);min-width:0;padding:6px 10px;border:1px solid var(--line);border-radius:var(--r1);cursor:pointer;list-style:none}
+.chat-call>summary::-webkit-details-marker{display:none}
+@media (hover:hover){.chat-call>summary:hover{background:var(--hover)}}
+.chat-call[open]>summary .i{rotate:90deg}
+.chat-call-name{flex:0 1 auto;min-width:0;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--f-code);color:var(--ink-2)}
+.chat-call-args{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-call-dot{width:6px;height:6px;flex:none;border-radius:50%;background:var(--good)}
+.chat-call-dot.pending{background:var(--warn)}
+.chat-call-body{margin-top:4px;padding:10px 12px;border-radius:var(--r2);background:var(--panel-2);max-height:320px;overflow:auto}
+.chat-call-body pre{margin:0;font:var(--f-code);color:var(--ink-2);white-space:pre-wrap;overflow-wrap:anywhere}
+.chat-call-body .chat-call-result{margin-top:var(--s2);padding-top:var(--s2);border-top:1px solid var(--line);color:var(--ink-3)}
+.chat-typing{display:flex;align-items:center;gap:6px;margin:0 0 var(--s5);font:var(--f-sm);color:var(--ink-3)}
+.chat-typing>i{width:5px;height:5px;border-radius:50%;background:var(--ink-3)}
+.chat-typing>span{margin-left:4px}
+.chat-genmeta{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--s2);margin:-16px 0 var(--s5);font:var(--f-xs);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.chat-genmeta>span{white-space:nowrap}
+.chat-genmeta>span+span::before{content:"·";margin-right:var(--s2)}
+.chat-genmeta-speed b{font-weight:600;color:var(--ink-2)}
+
+/* the approval card: warn is its border and its word, nothing louder */
+.gate{margin:0 0 var(--s5);border:1px solid color-mix(in oklab,var(--warn) 38%,var(--line-2));border-radius:var(--r2);background:var(--panel-2);overflow:hidden}
+.gate .gh{display:flex;align-items:baseline;gap:var(--s2);padding:10px 14px;border-bottom:1px solid var(--line)}
+.gate .gh b{color:var(--warn);font-weight:600}
+.gate .gh .mono{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--f-code);color:var(--ink)}
+.gate .gh .countdown{margin-left:auto}
+.gate .gb{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--s3);padding:12px 14px}
+.gate .sum,.gate .gate-note{margin:0;font:var(--f-md);color:var(--ink-2);text-wrap:pretty}
+.gate .gate-acts{display:grid;gap:10px}
+.gate .gate-act{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0 10px;align-items:start;cursor:pointer}
+.gate .gate-act input{margin-top:3px}
+.gate .gate-act[data-off] .gate-act-body{opacity:.55}
+.gate .gate-act-body{display:grid;gap:4px;min-width:0}
+.gate .gate-act-body>.mono{font:var(--f-code);color:var(--ink);overflow-wrap:anywhere}
+.gate .facts{display:grid;grid-template-columns:fit-content(40%) minmax(0,1fr);gap:4px 12px;margin:0;font:var(--f-sm)}
+.gate .facts dt{color:var(--ink-3);overflow-wrap:anywhere}
+.gate .facts dd{margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--f-code)}
+.gate .gate-verdicts{display:grid;gap:3px;margin:0;padding:0;list-style:none;font:var(--f-sm)}
+.gate .gate-verdicts li{display:flex;align-items:baseline;gap:var(--s2)}
+.gate .gate-verdicts .mono{font:var(--f-code);color:var(--ink-2)}
+.gate .gate-verdicts li>span:last-child{color:var(--bad)}
+.gate .gate-verdicts li>span[data-allowed]{color:var(--good)}
+.gate .btns{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2)}
+.gate .hint{margin-left:auto;display:flex;align-items:center;gap:5px;font:var(--f-xs);color:var(--ink-3)}
+.gate.resolved{border-color:var(--line)}
+.gate.resolved .gh b{color:var(--ink-3)}
+
+/* the question card (ask_owner): the approval card's frame; each option is a whole row to tap */
+.ask .gb{gap:var(--s4)}
+.ask-q{display:grid;gap:var(--s2);min-width:0;margin:0;padding:0;border:0}
+.ask-question{margin:0 0 var(--s2);padding:0;font:var(--f-md);font-weight:500;color:var(--ink);overflow-wrap:anywhere;text-wrap:pretty}
+.ask-hint{font-weight:400;color:var(--ink-3)}
+.ask-opts{display:grid;gap:2px}
+.ask-opt{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0 10px;align-items:start;align-content:center;min-height:var(--row-h);margin:0 -8px;padding:6px 8px;border-radius:var(--r1);cursor:pointer}
+.ask-opt>input{margin:3px 0 0;cursor:inherit}
+.ask-opt:has(>input:checked){background:var(--sel)}
+@media (hover:hover){.ask-opt:hover{background:var(--hover)} .ask-opt:has(>input:checked):hover{background:var(--sel)}}
+.ask-opt:has(>input:disabled){cursor:default;opacity:.6}
+.ask-opt-body{display:grid;gap:2px;min-width:0;font:var(--f-md);color:var(--ink);overflow-wrap:anywhere}
+.ask-opt-body small{font:var(--f-sm);color:var(--ink-3);text-wrap:pretty}
+.ask-other{cursor:default}
+.ask-other label{width:fit-content;cursor:pointer}
+.ask-other input[type=text]{width:100%;margin-top:4px}
+.ask .err{margin:0}
+.ask-record{display:grid;gap:var(--s3);margin:0;padding:0;list-style:none}
+.ask-record li{display:grid;gap:2px;min-width:0;overflow-wrap:anywhere}
+.ask-record li>span:first-child{font:var(--f-sm);color:var(--ink-3)}
+.ask-picked{font:var(--f-md);color:var(--ink)}
+.ask-own{font:var(--f-md);color:var(--ink-2);white-space:pre-wrap}
+
+/* where a compaction cut what the model sees; the thread above stays whole */
+.compacted{display:grid;gap:6px;min-width:0;margin:var(--s4) 0 var(--s5)}
+.compacted>span:first-child{display:flex;align-items:center;gap:10px;font:var(--f-xs);font-weight:500;color:var(--ink-3)}
+.compacted>span:first-child::before,.compacted>span:first-child::after{content:"";flex:1 1 auto;min-width:12px;height:1px;background:var(--line)}
+.compacted-note{text-align:center;font:var(--f-xs);color:var(--ink-3)}
+
+/* the empty chat */
+.chat-start{margin:auto;display:grid;justify-items:center;gap:var(--s2);max-width:44ch;padding:var(--s6) var(--s4);text-align:center}
+.chat-start h2{margin:var(--s2) 0 0;font:var(--f-xl);letter-spacing:var(--track-tight)}
+.chat-start p{margin:0;color:var(--ink-3)}
+.chat-start-recent{font:var(--f-sm)}
+.chat-start-recent button{padding:0;border:0;background:none;color:var(--ink-2);font:inherit;text-decoration:underline;text-decoration-color:var(--line-2);text-underline-offset:2px;cursor:pointer}
+@media (hover:hover){.chat-start-recent button:hover{color:var(--ink)}}
+
+/* "Jump to latest": sticky and zero-height, lifted by its own height, so it adds nothing to scrollHeight */
+.to-bottom-anchor{position:sticky;bottom:8px;z-index:2;display:flex;justify-content:center;height:0}
+.to-bottom{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;border:0;border-radius:var(--r2);background:var(--panel-2);box-shadow:var(--lift);color:var(--ink);font:var(--f-sm);translate:0 -100%;cursor:pointer}
+@media (hover:hover){.to-bottom:hover{background:color-mix(in oklab,var(--panel-2) 88%,var(--ink))}}
+.to-bottom .i{rotate:90deg}
+
+/* dock: the queue, the composer and the archived line share the thread's column */
+.chat-dock{padding:0 max(var(--s5),calc((100% - var(--chat-w)) / 2)) var(--s3)}
+.queue{display:grid;gap:6px;max-height:180px;overflow-y:auto;margin-bottom:var(--s2);padding:var(--s2) 10px;border:1px solid var(--line);border-radius:var(--r2)}
+.queue-note{margin:0;font:var(--f-xs);color:var(--ink-3)}
+.queue-row{display:flex;align-items:flex-start;gap:6px}
+.queue-n{width:14px;flex:none;font:var(--f-xs);font-family:var(--mono);line-height:26px;color:var(--ink-3)}
+.queue-text{flex:1;min-width:0;min-height:26px;resize:vertical;padding:3px 8px;border:1px solid var(--line);border-radius:var(--r1);background:var(--panel-2);color:var(--ink);font:var(--f-body)}
+.chat-status{margin:6px 0 0;text-align:center;font:var(--f-xs);color:var(--ink-3)}
+
+.composer{position:relative;display:grid;gap:var(--s2);padding:10px 10px 10px 14px;border:1px solid var(--line);border-radius:var(--r2);background:var(--panel-2)}
+.composer:focus-within{border-color:color-mix(in oklab,var(--accent) 45%,var(--line-2))}
+.composer textarea{display:block;width:100%;resize:none;max-height:40vh;padding:2px 0;border:0;border-radius:0;background:transparent;color:var(--ink);font:var(--f-body)}
+.composer textarea::placeholder{color:var(--ink-3)}
+.composer textarea:focus-visible{outline:none}
+.composer textarea:disabled{cursor:not-allowed}
+.composer[data-blocked]{background:var(--panel)}
+.composer-bar{display:flex;align-items:center;justify-content:flex-end;gap:var(--s2);min-width:0}
+.composer-hint{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--f-xs);color:var(--ink-3)}
+@media (pointer:coarse){
+  .composer-bar>.btn.quiet:first-child{margin-right:auto}
+  .msg-actions .btn,.msg-foot .btn{height:var(--ctl-h-sm)}
+  /* its ⌘⏎ is hidden on touch, and "Allow" alone would read as a third button */
+  .gate .hint{display:none}
+}
+.meter{display:inline-flex;align-items:center;gap:6px;flex:none;font:var(--f-xs);font-family:var(--mono);color:var(--ink-3)}
+.meter.hot{color:var(--warn)}
+.meter-bar{width:40px;height:3px;border-radius:var(--r0);background:var(--line-2);overflow:hidden}
+.meter-bar>i{display:block;height:100%;background:currentColor}
+.slash-menu{position:absolute;left:0;right:0;bottom:calc(100% + 6px);z-index:2;display:grid;gap:1px;padding:var(--s1);border-radius:var(--r2);background:var(--panel-2);box-shadow:var(--lift)}
+.slash-opt{display:flex;align-items:center;gap:10px;height:32px;padding:0 10px;border-radius:var(--r1);color:var(--ink-2);font:var(--f-md);cursor:pointer}
+.slash-opt .i{color:var(--ink-3)}
+.slash-opt[aria-selected=true]{background:var(--sel);color:var(--ink)}
+.slash-opt kbd{margin-left:auto}
+.composer-thumbs{display:flex;flex-wrap:wrap;gap:var(--s2)}
+.composer-thumb{position:relative;width:56px;height:56px;flex:none;overflow:hidden;border:1px solid var(--line);border-radius:var(--r1);background:var(--panel)}
+.composer-thumb img{display:block;width:100%;height:100%;object-fit:cover}
+.composer-thumb button{position:absolute;top:2px;right:2px;display:grid;place-items:center;width:18px;height:18px;padding:0;border:0;border-radius:var(--r0);background:color-mix(in oklab,var(--bg) 70%,transparent);color:var(--ink);cursor:pointer}
+@media (hover:hover){.composer-thumb button:hover{background:var(--bg)}}
+
+/* the model call trace (agent actions) */
+.calls-head{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2) var(--s3);margin-bottom:var(--s3)}
+.calls-head select{min-width:0;max-width:100%}
+.call-row{max-width:none}
+.call-bad{color:var(--bad);font-weight:600}
+
+@media (max-width:900px){
+  .head-title .chat-title-btn{font:var(--f-lg)}
+  /* the title keeps the room: the switch is one button naming the other view */
+  .chat-view{padding:0;background:none}
+  .chat-view button.on{display:none}
+  .chat-view button{color:var(--ink-2)}
+  .head .chat-web-pick{max-width:120px}
+  /* the numbers move to the ⋯ menu's Compact item, so attach, the bar, Queue and Stop fit a 375px bar */
+  .meter{font-size:0;gap:0}
+  /* with the keyboard up the dock never outgrows the screen: the thread keeps a row and Send stays in view */
+  .queue{max-height:min(180px,calc(var(--vvh,100dvh) * .2))}
+  .composer textarea{max-height:calc(var(--vvh,100dvh) * .3)}
+  .thread{padding-left:var(--s4);padding-right:var(--s4)}
+  .chat-dock{padding-left:var(--s2);padding-right:var(--s2);padding-bottom:max(var(--s3),var(--in-b))}
+  .msg[data-speaker=human]{max-width:92%}
+}
+/* the phone scale sets message text at 15px; a text field stays at 16px, or iOS zooms on focus */
+@media (pointer:coarse){.composer textarea,.msg-edit textarea,.queue-text{font-size:16px}}
+
+/* motion: only your sent message rises in; history and streamed text never animate */
+@media (prefers-reduced-motion:no-preference){
+  .msg.is-sent{animation:rise-in var(--dur-2) var(--ease-out) both}
+  .chat-typing{animation:fade-in var(--dur-2) var(--ease-out) 300ms both}
+  .chat-typing>i{animation:pulse 1.2s ease-in-out infinite}
+  .chat-typing>i:nth-child(2){animation-delay:150ms}
+  .chat-typing>i:nth-child(3){animation-delay:300ms}
+  .chat-call-dot.pending{animation:pulse 1.2s ease-in-out infinite}
+  .chat-image img{transition:opacity var(--dur-2) var(--ease-out)}
+}

@@ -1,0 +1,45 @@
+/* ── the agent page: header, Chats, Interfaces and Settings tabs ── */
+
+/* taller on desktop only: the phone header keeps the shared height plus the safe area */
+@media (min-width:901px){.page-head{min-height:64px}}
+.page-head .agent-mark{align-self:center}
+.page-desc{min-width:0;max-width:48ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Chats */
+.chats-page{max-width:var(--page-w);margin:0 auto;padding:var(--s4) var(--s5) var(--s7)}
+.chats-search{width:100%;margin-bottom:var(--s2)}
+.list-h,.list-fold>summary{margin:var(--s4) 0 var(--s1);padding:0 10px;font:var(--f-sm);font-weight:500;color:var(--ink-3);list-style:none;cursor:pointer}
+.list-h{cursor:default}
+.list-fold>summary::-webkit-details-marker{display:none}
+@media (hover:hover){.list-fold>summary:hover{color:var(--ink-2)}}
+.chat-list{margin:0;padding:0;list-style:none}
+
+/* Interfaces: a flex column the interface fills, not a scrolling page */
+.agent-apps:not([hidden]){display:flex;flex-direction:column;min-height:0;min-width:0}
+
+/* Settings */
+.settings-page{display:grid;gap:var(--s6);max-width:var(--page-w);margin:0 auto;padding:var(--s5)}
+.block{min-width:0}
+.block-h{margin:0 0 4px;font:var(--f-md);font-weight:600}
+.block-sub{margin:0 0 var(--s3);font:var(--f-sm);color:var(--ink-3)}
+.block-row .block-sub{margin:2px 0 0}
+.check{display:flex;align-items:center;gap:var(--s2);min-height:var(--ctl-h);font:var(--f-md);cursor:pointer}
+.check+.block-sub{margin-top:var(--s2)}
+.block-row{display:flex;align-items:center;gap:var(--s3);padding:var(--s3) 0;border-top:1px solid var(--line)}
+.block-row>div{min-width:0}
+.block-row b{font-weight:500}
+.block-row>.btn{margin-left:auto;flex:none}
+.link{display:inline;padding:0;border:0;background:none;color:var(--ink);font:inherit;text-decoration:underline;text-decoration-color:var(--line-2);text-underline-offset:2px;cursor:pointer}
+@media (hover:hover){.link:hover{text-decoration-color:currentColor}}
+
+@media (max-width:900px){
+  .chats-page{padding:var(--s3) var(--s4) var(--s7)}
+  .settings-page{padding:var(--s4)}
+  .page-head .agent-mark{display:none}
+}
+/* the name keeps the room: New chat is a + like a chat's, and Resume is in ⋯ */
+@media (max-width:540px){
+  .page-new{width:var(--ctl-h);height:var(--ctl-h);padding:0;border-color:transparent;color:var(--ink-2)}
+  .page-new>.i{width:16px;height:16px}
+  .page-new>span,.page-resume{display:none}
+}
