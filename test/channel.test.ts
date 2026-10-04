@@ -5,7 +5,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
 
-import { APP_CHUNK, DEVICE_CREDIT, DEVICE_WINDOW, FLAG_DATA, FLAG_END, FLAG_RESET, makeInviteUri, newInvite, PROTOCOL_VERSION, ServerSession } from "@mimi-os/protocol";
+import { APP_CHUNK, CLOSE_NOT_PAIRED, DEVICE_CREDIT, DEVICE_WINDOW, FLAG_DATA, FLAG_END, FLAG_RESET, makeInviteUri, newInvite, PROTOCOL_VERSION, ServerSession } from "@mimi-os/protocol";
 
 interface Stub {
     url: string;
@@ -13,7 +13,7 @@ interface Stub {
     sent: number;
     onopen: (() => void) | null;
     onmessage: ((event: { data: ArrayBuffer }) => void) | null;
-    onclose: (() => void) | null;
+    onclose: ((event: { code: number }) => void) | null;
     onerror: (() => void) | null;
 }
 
@@ -42,7 +42,7 @@ function browser(hash: string, paired: boolean): void {
             binaryType = "";
             onopen: (() => void) | null = null;
             onmessage: ((event: { data: ArrayBuffer }) => void) | null = null;
-            onclose: (() => void) | null = null;
+            onclose: ((event: { code: number }) => void) | null = null;
             onerror: (() => void) | null = null;
             closed = false;
             sent = 0;
@@ -52,10 +52,16 @@ function browser(hash: string, paired: boolean): void {
             close(): void {
                 if (this.closed) return;
                 this.closed = true;
-                this.onclose?.();
+                this.onclose?.({ code: 1005 });
             }
         },
     });
+}
+
+/** The gateway ends the socket with `code`. */
+function hangUp(ws: Stub, code: number): void {
+    ws.closed = true;
+    ws.onclose?.({ code });
 }
 
 const load = (): Promise<typeof import("../src/channel.ts")> =>
@@ -158,6 +164,45 @@ test("an undecodable record closes the socket instead of throwing out of onmessa
     channel.forgetDevice();
 });
 
+test("a gateway that says this device is not paired lands on rejected at once, never redials, and a new link still pairs", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    browser("", true);
+    const channel = await load();
+    sockets[0]?.onopen?.();
+    hangUp(sockets[0] as Stub, CLOSE_NOT_PAIRED);
+    assert.equal(channel.getSnapshot().state, "rejected");
+    t.mock.timers.tick(10 * 60_000);
+    channel.redialNow();
+    await tick();
+    assert.equal(sockets.length, 1, "no retry loop, not even on coming back to the page");
+
+    const invite = newInvite(Date.now());
+    const paired = channel.pairWithInvite(makeInviteUri(Buffer.alloc(32, 9), invite, "http://100.101.1.2:46464"));
+    await tick();
+    assert.equal(sockets.at(-1)?.url, `ws://100.101.1.2:46464/channel/pair?invite=${invite.id}`);
+    sockets.at(-1)?.close();
+    await assert.rejects(paired, /closed before it finished/);
+    channel.forgetDevice();
+});
+
+test("a bare or abnormal close before the handshake completes still redials, with no rejected screen in between", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    browser("", true);
+    const channel = await load();
+    const states: string[] = [];
+    channel.subscribe((s) => states.push(s.state));
+    // a gateway restart, a handshake past its deadline, a gateway stop, a dropped link: each one only a redial away
+    for (const [i, code] of [1000, 1006, 1001, 1006].entries()) {
+        sockets[i]?.onopen?.();
+        hangUp(sockets[i] as Stub, code);
+        assert.equal(channel.getSnapshot().state, "reconnecting");
+        t.mock.timers.tick(1000 * 2 ** i);
+        assert.equal(sockets.length, i + 2);
+    }
+    assert.equal(states.includes("rejected"), false);
+    channel.forgetDevice();
+});
+
 test("a used or unknown invite reads as a dead link, and only a gateway never reached reads as unreachable", async () => {
     // what the gateway does with an invite id it does not hold: it completes the upgrade, then drops the socket with no close frame
     const server = createServer().on("upgrade", (req, socket) => {
@@ -225,7 +270,7 @@ async function gateway(protocol = PROTOCOL_VERSION, device: "active" | "pending"
             binaryType = "";
             onopen: (() => void) | null = null;
             onmessage: ((event: { data: ArrayBuffer }) => void) | null = null;
-            onclose: (() => void) | null = null;
+            onclose: ((event: { code: number }) => void) | null = null;
             onerror: (() => void) | null = null;
             closed = false;
             sent = 0;
@@ -246,7 +291,7 @@ async function gateway(protocol = PROTOCOL_VERSION, device: "active" | "pending"
             close(): void {
                 if (this.closed) return;
                 this.closed = true;
-                this.onclose?.();
+                this.onclose?.({ code: 1005 });
             }
         },
     });

@@ -2,7 +2,8 @@
  *  While unpaired it asks for the one link `mimi pair` prints, which names the gateway address too; typing
  *  the address by hand is the fallback for a link that names none. Once this page has been online it is gone:
  *  a dropped connection shows in each screen header instead, and the URLs live in Settings > Connection.
- *  Until then a paired device that cannot connect gets the same URL list here, to switch to one that answers. */
+ *  Until then a paired device that cannot connect gets the same URL list here, to switch to one that answers,
+ *  and after 20 s Clean and forget as well; a gateway that says the device is not paired leads straight to it. */
 import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import { PROTOCOL_VERSION } from "@mimi-os/protocol";
@@ -81,6 +82,16 @@ export function PairGate(): ReactElement | null {
     const [wasReady, setWasReady] = useState(ready);
     if (ready && !wasReady) setWasReady(true);
     const visible = !ready && !(wasReady && (dialing || snap.state === "incompatible"));
+    // a dial that has not got through in 20 s offers a way out, even from a gateway too old to say "not paired"
+    const [stuck, setStuck] = useState(false);
+    useEffect(() => {
+        if (!dialing) return;
+        const timer = setTimeout(() => setStuck(true), 20_000);
+        return () => {
+            clearTimeout(timer);
+            setStuck(false);
+        };
+    }, [dialing]);
 
     // the dialog is unmounted rather than closed, so the focus it took is handed back to its opener by hand
     const opener = useRef<HTMLElement | null>(null);
@@ -112,6 +123,53 @@ export function PairGate(): ReactElement | null {
     const forced = link !== null && link.address === "";
     const typed = manual || forced;
     const submit = (): void => void doPair(inviteInput.trim(), typed ? gatewayInput : undefined);
+    // the same form pairs a fresh device and re-pairs one this gateway no longer knows
+    const pairForm = (
+        <div className="pair-form">
+            <label>Pairing link
+                <input
+                    type="text"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={inviteInput}
+                    placeholder="mimi://pair/v2?…"
+                    disabled={busy}
+                    onChange={(event) => setInviteInput(event.target.value)}
+                    onKeyDown={(event) => { if (event.key === "Enter") submit(); }}
+                    className="mono"
+                />
+            </label>
+            {link !== null && link.address !== "" && !manual && (
+                <p className="pair-note">Gateway <span className="mono">{link.address}</span>, from the link.</p>
+            )}
+            {forced && <p className="pair-note">This link names no gateway. Enter its address below.</p>}
+            {typed && (
+                <label>Gateway address
+                    <input
+                        type="text"
+                        autoComplete="off"
+                        spellCheck={false}
+                        value={gatewayInput}
+                        placeholder="http://127.0.0.1:46464"
+                        disabled={busy}
+                        onChange={(event) => setGatewayInput(event.target.value)}
+                        onKeyDown={(event) => { if (event.key === "Enter") submit(); }}
+                        className="mono"
+                    />
+                </label>
+            )}
+            <div className="pair-acts">
+                {forced ? <span /> : (
+                    <Btn kind="quiet" sm disabled={busy} onClick={() => setManual((value) => !value)}>
+                        {manual ? "Use the address in the link" : "Enter the address by hand"}
+                    </Btn>
+                )}
+                <Btn kind="primary" sm disabled={busy || !inviteInput.trim()} onClick={submit}>
+                    {busy ? "Pairing…" : "Pair"}
+                </Btn>
+            </div>
+        </div>
+    );
     const sasGrouped = snap.sas && snap.sas.length === 6 ? `${snap.sas.slice(0, 3)}-${snap.sas.slice(3)}` : snap.sas;
     const active = gatewayAddress();
 
@@ -130,6 +188,12 @@ export function PairGate(): ReactElement | null {
                                 <p className="pair-note">Another URL may reach this gateway. Switching keeps the same pairing.</p>
                                 <ConnectionList />
                             </>
+                        )}
+                        {stuck && savedGateways().length > 0 && (
+                            <div className="pair-acts">
+                                <span className="pair-note">If the gateway was reinstalled, this device has to pair again.</span>
+                                <Btn kind="quiet" sm onClick={() => void cleanAndForget()}>Clean and forget</Btn>
+                            </div>
                         )}
                     </>
                 )}
@@ -153,58 +217,18 @@ export function PairGate(): ReactElement | null {
                 {!ready && snap.state === "rejected" && (
                     <>
                         <h2>Not paired</h2>
-                        <p>This device is not paired with this gateway anymore.</p>
-                        <Btn kind="primary" onClick={() => void cleanAndForget()}>Clean and forget</Btn>
+                        <p>This device is not paired with this gateway anymore. Run <code className="mono">mimi pair</code> on the gateway and paste the new link, or clean and forget this device.</p>
+                        {pairForm}
+                        <div className="pair-acts">
+                            <Btn kind="quiet" sm disabled={busy} onClick={() => void cleanAndForget()}>Clean and forget</Btn>
+                        </div>
                     </>
                 )}
                 {!ready && snap.state === "pairing_required" && (
                     <>
                         <h2>Connect to mimi-os</h2>
                         <p>Run <code className="mono">mimi pair</code> in a terminal on the gateway, then paste the link it prints.</p>
-                        <div className="pair-form">
-                            <label>Pairing link
-                                <input
-                                    type="text"
-                                    autoComplete="off"
-                                    spellCheck={false}
-                                    value={inviteInput}
-                                    placeholder="mimi://pair/v2?…"
-                                    disabled={busy}
-                                    onChange={(event) => setInviteInput(event.target.value)}
-                                    onKeyDown={(event) => { if (event.key === "Enter") submit(); }}
-                                    className="mono"
-                                />
-                            </label>
-                            {link !== null && link.address !== "" && !manual && (
-                                <p className="pair-note">Gateway <span className="mono">{link.address}</span>, from the link.</p>
-                            )}
-                            {forced && <p className="pair-note">This link names no gateway. Enter its address below.</p>}
-                            {typed && (
-                                <label>Gateway address
-                                    <input
-                                        type="text"
-                                        autoComplete="off"
-                                        spellCheck={false}
-                                        value={gatewayInput}
-                                        placeholder="http://127.0.0.1:46464"
-                                        disabled={busy}
-                                        onChange={(event) => setGatewayInput(event.target.value)}
-                                        onKeyDown={(event) => { if (event.key === "Enter") submit(); }}
-                                        className="mono"
-                                    />
-                                </label>
-                            )}
-                            <div className="pair-acts">
-                                {forced ? <span /> : (
-                                    <Btn kind="quiet" sm disabled={busy} onClick={() => setManual((value) => !value)}>
-                                        {manual ? "Use the address in the link" : "Enter the address by hand"}
-                                    </Btn>
-                                )}
-                                <Btn kind="primary" sm disabled={busy || !inviteInput.trim()} onClick={submit}>
-                                    {busy ? "Pairing…" : "Pair"}
-                                </Btn>
-                            </div>
-                        </div>
+                        {pairForm}
                     </>
                 )}
                 {error && <p role="alert" style={{ color: "var(--bad)" }}>{error}</p>}

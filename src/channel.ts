@@ -2,6 +2,7 @@
 import {
     APP_CHUNK,
     APP_HEADER_MAX,
+    CLOSE_NOT_PAIRED,
     DEVICE_CREDIT,
     DEVICE_WINDOW,
     ClientSession,
@@ -342,7 +343,6 @@ let generation = 0;
 let currentWs: WebSocket | null = null;
 let activeSession: Connection | null = null;
 let firstAttempt = true;
-let consecutiveRejects = 0;
 let backoffMs = 1000;
 const MAX_BACKOFF_MS = 30_000;
 // a gateway on another protocol version only changes when someone deploys, so it is rechecked slowly
@@ -392,8 +392,6 @@ function connect(key: DeviceKey, gen: number): void {
     currentWs = ws;
     const conn: Connection = { session, ws, tunnels: new Map(), streamCounter: { next: 1 }, written: 0 };
     let stream0Chunks: Uint8Array[] = [];
-    let opened = false;
-    let reachedReady = false;
     let incompatible: { peer?: number | undefined } | null = null;
     let heard = false;
     let pinger: ReturnType<typeof setInterval> | undefined;
@@ -452,7 +450,6 @@ function connect(key: DeviceKey, gen: number): void {
 
     ws.onopen = () => {
         if (stale()) { ws.close(); return; }
-        opened = true;
         for (const chunk of session.start()) ws.send(pin(chunk));
     };
     ws.onmessage = (event) => {
@@ -469,7 +466,7 @@ function connect(key: DeviceKey, gen: number): void {
         }
     };
     ws.onerror = () => { /* onclose follows and drives the actual reconnect logic */ };
-    const closed = (): void => {
+    const closed = (code?: number): void => {
         clearInterval(pinger);
         clearTimeout(deadline);
         if (pingNow === ping) pingNow = null;
@@ -478,27 +475,22 @@ function connect(key: DeviceKey, gen: number): void {
         for (const [id, t] of [...conn.tunnels]) failTunnel(conn, id, t, new Error("The gateway connection closed."), false);
         if (gen !== generation) return;
         firstAttempt = false;
+        // the gateway turned this key away by name: no redial changes that, only pairing again does
+        if (code === CLOSE_NOT_PAIRED) { setSnapshot({ state: "rejected", sas: null }); return; }
         if (incompatible) {
             setSnapshot({ state: "incompatible", sas: null, peer: incompatible.peer });
             scheduleReconnect(key, gen, incompatibleMs);
             incompatibleMs = Math.min(incompatibleMs * 2, INCOMPATIBLE_MAX_MS);
             return;
         }
-        if (reachedReady) consecutiveRejects = 0;
-        else if (opened) {
-            // A real gateway accepted the WS but closed before completing the handshake — an unknown or revoked key (uniform close).
-            consecutiveRejects += 1;
-            if (consecutiveRejects >= 3) { setSnapshot({ state: "rejected", sas: null }); return; }
-        }
         setSnapshot({ state: "reconnecting", sas: null });
         scheduleReconnect(key, gen, backoffMs);
         backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
     };
-    ws.onclose = closed;
+    ws.onclose = (event) => closed(event.code);
 
     function handleEvent(ev: ClientEvent): void {
         if (ev.type === "ready") {
-            reachedReady = true;
             backoffMs = 1000;
             incompatibleMs = INCOMPATIBLE_FIRST_MS;
             if (ev.info.activation === "pending") setSnapshot({ state: "pending_activation", sas: key.sas ?? null });
@@ -524,7 +516,6 @@ function startChannel(key?: DeviceKey): void {
     activeSession = null;
     if (!useKey) { setSnapshot({ state: "pairing_required", sas: null }); return; }
     firstAttempt = true;
-    consecutiveRejects = 0;
     backoffMs = 1000;
     incompatibleMs = INCOMPATIBLE_FIRST_MS;
     connect(useKey, generation);
