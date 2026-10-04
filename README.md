@@ -36,7 +36,7 @@ pnpm desktop:doctor       # read-only check of Node, Rust, Cargo and Tauri CLI v
 pnpm desktop:dev          # vite on 127.0.0.1:1420 plus cargo tauri dev, with live reload
 pnpm desktop:check        # icons, cargo check, native library tests
 pnpm desktop:build:test   # debug executable, unbundled
-pnpm desktop:build        # macOS: mimi.app; Windows: NSIS installer
+pnpm desktop:build        # macOS: mimi.app, which can also dial plain http://; Windows: NSIS installer
 pnpm desktop:icons        # regenerate icons from tauri/src-tauri/icons/icon.png
 pnpm android:apk          # debug APK for an arm64 phone
 pnpm android:release      # signed release APK that can also dial plain http://

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Merged into mimi.app by the Tauri CLI. App Transport Security lets a bundled app dial plain http:// and ws://
+     only to private addresses, so a gateway on a public IP went unanswered; the channel is end-to-end
+     encrypted (Noise + ML-KEM) on any transport, as the Android release's cleartext setting already assumes. -->
+<plist version="1.0">
+<dict>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+    </dict>
+</dict>
+</plist>
