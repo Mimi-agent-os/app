@@ -39,6 +39,7 @@ import { agentState, openEmptyChat, refreshAgent, useChats } from "../agent-chat
 import { useInterfaces, type AgentApp } from "../app-api.ts";
 import { resolveApproval } from "../approval-api.ts";
 import { ApiError, getSnapshot } from "../channel.ts";
+import type { ChatChangedDetail } from "../events.ts";
 import { useChatActions } from "../components/chat-row.tsx";
 import { useDialog } from "../components/dialog.tsx";
 import { Icon } from "../components/icon.tsx";
@@ -1367,8 +1368,9 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
                     setRows(page.items);
                     setMore(page.hasMore);
                 } else {
-                    // page items come last, so an edited row overwrites its cached copy
-                    setRows([...new Map([...current, ...page.items].map((r) => [r.id, r])).values()].sort((a, b) => a.id - b.id));
+                    // from its oldest row on the page is the whole truth: a row it lacks there was cut by an edit on another device
+                    const kept = pageOldest === undefined ? [] : current.filter((r) => r.id < pageOldest);
+                    setRows([...kept, ...page.items].sort((a, b) => a.id - b.id));
                     if (!page.hasMore) setMore(false);
                 }
             },
@@ -1431,6 +1433,26 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
     useEffect(() => {
         if (me.connected) refresh();
     }, [me.connected, refresh]);
+
+    // a turn, an edit or a compaction from another device, or a reconnect that may have missed one, reloads the newest page;
+    // a turn this screen streams or replays reconciles the history itself when it ends
+    useEffect(() => {
+        let alive = true;
+        const reload = (): void => {
+            if (!running.current) loadNewest(() => alive);
+        };
+        const changed = (e: Event): void => {
+            const { agent: name, sessions } = (e as CustomEvent<ChatChangedDetail>).detail;
+            if (name === agent && sessions.includes(conversation)) reload();
+        };
+        window.addEventListener("mimi:chat-changed", changed);
+        window.addEventListener("mimi:resync", reload);
+        return () => {
+            alive = false;
+            window.removeEventListener("mimi:chat-changed", changed);
+            window.removeEventListener("mimi:resync", reload);
+        };
+    }, [agent, conversation, loadNewest]);
 
     useEffect(() => {
         if (rows === null) return;
