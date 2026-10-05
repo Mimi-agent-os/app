@@ -1,4 +1,4 @@
-// The shell's one list of every agent's chats: fetched per agent, refreshed on chat_changed, and cached so an offline agent keeps its titles.
+// The shell's one list of every agent's chats: fetched per agent, refreshed on chat_changed, cached so an offline agent keeps its titles, and watched for turns that finish.
 import { useSyncExternalStore } from "react";
 
 import { createConversation, listConversations, patchConversation, type AgentSummary, type ConversationInfo } from "./api.ts";
@@ -15,6 +15,13 @@ interface AgentChats {
 }
 
 export const NO_CHATS: AgentChats = Object.freeze({ rows: null, stale: false, error: "" });
+
+/** The detail of `mimi:reply-finished`: a chat this device saw busy that a later list shows idle. */
+export interface ReplyFinishedDetail {
+    agent: string;
+    id: number;
+    title: string | null;
+}
 
 interface AgentStateWord {
     word: string;
@@ -140,9 +147,16 @@ export function refreshAgent(agent: string): Promise<readonly ConversationInfo[]
             rows = rows.toSorted(byRecent);
             // an agent dropped meanwhile is not brought back
             if (!chats.has(agent)) return rows;
+            // a row seen busy that is idle now finished a turn: cached rows are stored idle, and a delegation thread answers an agent, not the owner
+            const wasBusy = new Set(chats.get(agent)?.rows?.filter((c) => c.busy).map((c) => c.id));
             clearTimeout(retries.get(agent)?.timer);
             retries.delete(agent);
             write(agent, { rows, stale: false, error: "" });
+            for (const c of rows) {
+                if (wasBusy.has(c.id) && !c.busy && !isDelegation(c)) {
+                    window.dispatchEvent(new CustomEvent<ReplyFinishedDetail>("mimi:reply-finished", { detail: { agent, id: c.id, title: c.title } }));
+                }
+            }
             const cache = readCache();
             cache[agent] = homeChats(rows, undefined, HOME_MAX).shown.map((c) => ({ ...c, busy: false, awaitingApproval: false }));
             writeCache(cache);

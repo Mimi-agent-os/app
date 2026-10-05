@@ -95,6 +95,9 @@ const {
 } = await import("../src/agent-chats.ts");
 const { rememberChat } = await import("../src/route.ts");
 
+const replies: unknown[] = [];
+window.addEventListener("mimi:reply-finished", (e) => { replies.push((e as CustomEvent).detail); });
+
 const settle = async (): Promise<void> => {
     for (let spin = 0; spin < 10; spin++) await new Promise((r) => setImmediate(r));
 };
@@ -105,6 +108,7 @@ const gate = (over: Partial<ApprovalSummary>): ApprovalSummary =>
 
 async function fresh(agents: Record<string, ConversationInfo[]>): Promise<void> {
     startAgentChats([]);
+    replies.length = 0;
     stored.clear();
     down.clear();
     held = null;
@@ -475,4 +479,42 @@ test("agentLanding: the soonest gate's chat, else the last chat viewed, else the
     assert.deepEqual(agentLanding("wren", []), { at: "chat", agent: "wren", id: 4 }, "a remembered chat not in the list falls to the most recent");
     assert.deepEqual(agentLanding("scout", []), { at: "agent", agent: "scout" });
     assert.deepEqual(agentLanding("nobody", []), { at: "agent", agent: "nobody" });
+});
+
+// ── finished replies ──────────────────────────────────────────────────────────
+
+test("a chat seen busy that a later list shows idle announces one finished reply, and the first load announces none", async () => {
+    await fresh({ wren: [chat(1, { busy: true }), chat(2, { busy: true, title: null })], scout: [chat(3)] });
+    assert.deepEqual(replies, [], "a turn already running when the list first arrives has not finished yet");
+    server.set("wren", [chat(1), chat(2, { busy: true, title: null })]);
+    await refreshAgent("wren");
+    server.set("wren", [chat(1), chat(2, { title: null })]);
+    await refreshAgent("wren");
+    await refreshAgent("wren");
+    assert.deepEqual(replies, [{ agent: "wren", id: 1, title: "Chat 1" }, { agent: "wren", id: 2, title: null }]);
+});
+
+test("a resync of rows never seen busy announces nothing, though a turn ran meanwhile", async () => {
+    await fresh({ wren: [chat(1)], scout: [chat(2)] });
+    server.set("wren", [chat(1, { messages: 6, updatedAt: "2026-09-30 09:00:00" })]);
+    window.dispatchEvent(new CustomEvent("mimi:resync"));
+    await settle();
+    assert.deepEqual(replies, []);
+});
+
+test("a delegation thread's turn answers an agent, not the owner, and announces nothing", async () => {
+    await fresh({ wren: [chat(1, { busy: true, title: "← Draft", titleByUser: true })] });
+    server.set("wren", [chat(1, { title: "← Draft", titleByUser: true })]);
+    await refreshAgent("wren");
+    assert.deepEqual(replies, []);
+});
+
+test("a failed refresh keeps the busy mark, so a turn that ends meanwhile is announced once the list reads back", async () => {
+    await fresh({ wren: [chat(1, { busy: true })] });
+    down.add("wren");
+    await refreshAgent("wren").catch(() => undefined);
+    down.delete("wren");
+    server.set("wren", [chat(1)]);
+    await refreshAgent("wren");
+    assert.deepEqual(replies, [{ agent: "wren", id: 1, title: "Chat 1" }]);
 });

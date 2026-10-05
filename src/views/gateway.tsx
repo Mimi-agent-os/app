@@ -694,8 +694,12 @@ function InstancePanel(): ReactElement {
                 name="System notifications"
                 sub={
                     <>
-                        System alerts for agent messages, device requests and approvals while this
-                        tab is in the background. In-page toasts are always on.
+                        {androidApp
+                            ? "System alerts for approvals, questions, Inbox items and device requests while the app is in the background."
+                            : `System alerts for approvals, questions, finished replies, Inbox items and device requests while ${inTauri
+                                ? "the window is in the background or, on a Mac, closed to the Dock"
+                                : "this tab is hidden or its window is in the background"}.`}{" "}
+                        In-app toasts are always on.
                         <Where>
                             {inTauri
                                 ? (androidApp ? "Delivered through the app" : "Delivered through the desktop app")

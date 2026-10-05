@@ -31,6 +31,10 @@ pnpm desktop:build                      # macOS: target/release/bundle/macos/mim
 Arguments after `--` go to cargo. On first start the app shows the Connect screen: paste the link
 `mimi pair` prints. The address and the device key stay in the WebView's `localStorage`.
 
+On macOS, closing the window keeps the app in the Dock with its channel up, so system notifications
+(approvals, questions, finished replies, Inbox items, device requests) keep coming; a click on the Dock
+icon brings the window back, and Cmd+Q or Quit mimi quits. On Windows, closing the window quits.
+
 Desktop builds come out unsigned and unnotarized; signing settings go under `bundle` in `tauri.conf.json`.
 
 The native surface is seven commands (`notify`, `push_token`, `quit_app`, `open_link`, `apps_attach`,

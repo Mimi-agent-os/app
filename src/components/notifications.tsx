@@ -1,9 +1,10 @@
-// The shell's one `/events` subscription: the Inbox unread count, inbox toasts and approval toasts. Call useInboxUnread exactly once.
+// The shell's one `/events` subscription: the Inbox unread count, inbox toasts, approval toasts and finished replies. Call useInboxUnread exactly once.
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import type { ReplyFinishedDetail } from "../agent-chats.ts";
 import { listInbox } from "../inbox-api.ts";
 import { subscribeEvents, type ApprovalEvent, type InboxItemEvent } from "../events.ts";
-import { announceApproval, itemAuthor, notifyInboxItem } from "../sys-notify.ts";
+import { announceApproval, announceReply, itemAuthor, notifyInboxItem } from "../sys-notify.ts";
 import { go } from "../route.ts";
 import { useToast } from "./toast.tsx";
 
@@ -21,8 +22,10 @@ export function useInboxUnread(): number {
 
     useEffect(() => {
         refresh();
+        const onReply = (e: Event): void => announceReply((e as CustomEvent<ReplyFinishedDetail>).detail, toastRef.current);
         window.addEventListener("mimi:inbox-changed", refresh);
         window.addEventListener("mimi:resync", refresh);
+        window.addEventListener("mimi:reply-finished", onReply);
         const stop = subscribeEvents({
             onInboxItem: (event: InboxItemEvent) => {
                 toastRef.current(`${itemAuthor(event) ?? "System"}: ${event.title}`);
@@ -33,6 +36,7 @@ export function useInboxUnread(): number {
         return () => {
             window.removeEventListener("mimi:inbox-changed", refresh);
             window.removeEventListener("mimi:resync", refresh);
+            window.removeEventListener("mimi:reply-finished", onReply);
             stop();
         };
     }, [refresh]);
