@@ -57,6 +57,16 @@ document.addEventListener("visibilitychange", () => {
 });
 window.addEventListener("online", redialNow);
 
+// a file dropped anywhere but a drop zone would open in the window in place of the app
+for (const type of ["dragover", "drop"]) {
+    window.addEventListener(type, (event) => {
+        const drag = event as DragEvent;
+        if (drag.defaultPrevented || !drag.dataTransfer?.types.includes("Files")) return;
+        drag.preventDefault();
+        drag.dataTransfer.dropEffect = "none";
+    });
+}
+
 if (androidApp) renewPushToken();
 
 // the desktop webview opens no new windows: a web or mail link an agent wrote opens in the system browser instead

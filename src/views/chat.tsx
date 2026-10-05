@@ -12,7 +12,7 @@ import {
     useRef,
     useState,
 } from "react";
-import type { ReactElement, SyntheticEvent } from "react";
+import type { DragEvent, ReactElement, SyntheticEvent } from "react";
 import { createPortal, flushSync } from "react-dom";
 
 import type { OwnerAnswer, OwnerQuestion } from "@mimi-os/protocol";
@@ -1843,11 +1843,41 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
     const word = gated || waiting || asking ? "needs you" : responding ? "responding" : quiet?.word;
     const tone = gated || waiting || asking ? "warn" : responding ? "accent" : quiet?.tone;
     const blocked = !me.connected ? `${agent} is offline` : me.paused ? `${agent} is paused. Resume it to send.` : null;
+    // files dragged from the desktop drop anywhere on the chat; enter and leave fire per child, so they are counted
+    const [dropping, setDropping] = useState(false);
+    const dragDepth = useRef(0);
+    const takesDrop = (e: DragEvent<HTMLElement>): boolean => !onWeb && blocked === null && e.dataTransfer.types.includes("Files");
     const compact = slash.find((c) => c.slash === "/compact");
     const recent = emptyChat ? (listRows ?? []).filter((c) => c.id !== conversation && !c.archived && !isDelegation(c) && c.messages > 0).slice(0, 2) : [];
 
     return (
-        <section className="chat-screen" aria-label={title} data-view={onWeb ? "web" : undefined}>
+        <section
+            className="chat-screen"
+            aria-label={title}
+            data-view={onWeb ? "web" : undefined}
+            onDragEnter={(e) => {
+                if (!takesDrop(e)) return;
+                dragDepth.current += 1;
+                setDropping(true);
+            }}
+            onDragOver={(e) => {
+                if (!takesDrop(e)) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "copy";
+            }}
+            onDragLeave={(e) => {
+                if (!takesDrop(e)) return;
+                dragDepth.current = Math.max(0, dragDepth.current - 1);
+                if (dragDepth.current === 0) setDropping(false);
+            }}
+            onDrop={(e) => {
+                if (!takesDrop(e)) return;
+                e.preventDefault();
+                dragDepth.current = 0;
+                setDropping(false);
+                composer.current?.attach(Array.from(e.dataTransfer.files));
+            }}
+        >
             <ChatHead
                 agent={agent}
                 title={title}
@@ -2035,6 +2065,11 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
                         if (!viewing.from.isConnected && matchMedia("(pointer: fine)").matches) composer.current?.focus();
                     }}
                 />
+            )}
+            {dropping && (
+                <div className="drop-veil" aria-hidden="true">
+                    <span>{currentModel?.vision === true ? "Drop images to attach" : `${currentModel?.name ?? "This model"} cannot read images`}</span>
+                </div>
             )}
         </section>
     );

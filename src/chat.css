@@ -1,6 +1,9 @@
 /* ── the chat screen: header, thread, dock ── */
 
-.chat-screen{display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:100%;min-height:0;min-width:0}
+.chat-screen{position:relative;display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:100%;min-height:0;min-width:0}
+/* files dragged over a chat: one quiet layer over the whole screen that never catches the drag itself */
+.drop-veil{position:absolute;inset:var(--s2);z-index:5;display:grid;place-items:center;border:1px dashed var(--line-2);border-radius:var(--r2);background:color-mix(in oklab,var(--panel) 90%,transparent);pointer-events:none}
+.drop-veil span{font:var(--f-md);font-weight:500;color:var(--ink-2)}
 .chat-screen>.thread{grid-area:2/1}
 .chat-screen>.chat-dock{grid-area:3/1}
 

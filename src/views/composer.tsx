@@ -53,6 +53,8 @@ export interface ComposerHandle {
     /** Empties the box, staged images included, and returns what it held. */
     take(): { text: string; images: string[] };
     focus(): void;
+    /** Stages files dropped on the chat the way the picker does; a model that cannot read images says so. */
+    attach(files: File[]): void;
 }
 
 interface ComposerProps {
@@ -135,6 +137,11 @@ function ComposerView({
             return held;
         },
         focus: () => box.current?.focus(),
+        attach: (files) => {
+            if (!files.some((f) => f.type.startsWith("image/"))) onNotice("Only images can be attached.");
+            else if (canAttach) void addFiles(files);
+            else if (noImages) onNotice(`${noImages} cannot read images.`);
+        },
     }));
 
     // height follows the content; the stylesheet's max-height caps it
