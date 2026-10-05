@@ -864,18 +864,31 @@ const CALLS_SHOWN = 100;
 export function CallsTab({ agent }: { agent: string }): ReactElement {
     const { rows: chats } = useChats(agent);
     const [chat, setChat] = useState<number | null>(null);
-    const [calls, setCalls] = useState<LlmCallInfo[] | null>(null);
+    // keyed by what was asked: another chat's list never shows, and a refetch keeps this one on screen
+    const [loaded, setLoaded] = useState<{ key: string; calls: LlmCallInfo[] } | null>(null);
     const [err, setErr] = useState("");
+    // a recorded call or a new price (every cost here is at the current price): refetched in place
+    const [live, setLive] = useState(0);
+    const key = JSON.stringify([agent, chat]);
+    const calls = loaded?.key === key ? loaded.calls : null;
     useEffect(() => {
         let alive = true;
-        setCalls(null);
-        setErr("");
         listLlmCalls(agent, CALLS_SHOWN, chat ?? undefined).then(
-            (list) => { if (alive) setCalls(list); },
+            (list) => { if (alive) { setLoaded({ key, calls: list }); setErr(""); } },
             (e: unknown) => { if (alive) setErr(errorMessage(e, "Could not load this agent's model calls.")); },
         );
         return () => { alive = false; };
-    }, [agent, chat]);
+    }, [agent, chat, key, live]);
+
+    useEffect(() => {
+        const refresh = (): void => setLive((value) => value + 1);
+        window.addEventListener("mimi:usage-changed", refresh);
+        window.addEventListener("mimi:resync", refresh);
+        return () => {
+            window.removeEventListener("mimi:usage-changed", refresh);
+            window.removeEventListener("mimi:resync", refresh);
+        };
+    }, []);
 
     const estimated = calls?.filter((c) => c.usageEstimated).length ?? 0;
     const summary = calls && calls.length > 0 ? [

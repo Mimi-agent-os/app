@@ -149,6 +149,8 @@ export interface DayInfo {
 export interface DashboardSnapshot {
     at: string;
     day: DayInfo;
+    /** Every agent's spend on the owner's day, one no longer pinned included; model checks are not an agent's. */
+    today: { tokens: number; cost: number };
     // == approvals.length below, so a "2 awaiting approval" strip can never disagree with the rows under it
     waiting: { approvals: number };
     agents: DashboardAgent[];

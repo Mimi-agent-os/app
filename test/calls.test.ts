@@ -93,6 +93,12 @@ const summary = new Function("calls", "CALLS_SHOWN", "kilo", "plural", "usd", `$
     (calls: LlmCallInfo[] | null, max: number, k: typeof kilo, p: typeof plural, u: typeof usd) => string;
 const CALLS_SHOWN = Number(shown[1]);
 
+test("the Calls list refetches in place on a recorded call or a new price, and never shows another chat's list", () => {
+    assert.match(source, /const calls = loaded\?\.key === key \? loaded\.calls : null;/);
+    assert.match(source, /\}, \[agent, chat, key, live\]\);/);
+    assert.match(source, /export function CallsTab[\s\S]*?window\.addEventListener\("mimi:usage-changed", refresh\);\n\s*window\.addEventListener\("mimi:resync", refresh\);/);
+});
+
 test("a call row says what was sent and what came out, its cost only when the model is priced, and never undefined", () => {
     assert.equal(tokens(call(1, { promptTokens: 8000, completionTokens: 400 }), kilo, usd), "8k in → 400 out", "an unpriced model shows no $0.00");
     assert.equal(tokens(call(1, { promptTokens: 8000, completionTokens: 400, cost: 0.036 }), kilo, usd), "8k in → 400 out · $0.04");

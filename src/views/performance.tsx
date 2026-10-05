@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 
 import { getPerformance, type PerformanceStats } from "../performance-api.ts";
@@ -10,8 +10,10 @@ const decimal = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 const rate = (value: number | null, samples: number): string => samples > 0 && value !== null && Number.isFinite(value) && value >= 0 ? value > 0 && value < 0.1 ? "<0.1" : decimal.format(value) : "–";
 const duration = (value: number | null, samples: number): string => samples > 0 && value !== null && Number.isFinite(value) && value >= 0 ? value < 1000 ? `${number.format(Math.round(value))} ms` : `${decimal.format(value / 1000)} s` : "–";
 
-export default function PerformancePanel({ days, agent, model, revision }: { days: number; agent: string | null; model: string | null; revision: number }): ReactElement {
+/** `live` refetches in place (a recorded call, the owner's midnight); `revision` and a retry show as loading. */
+export default function PerformancePanel({ days, agent, model, revision, live }: { days: number; agent: string | null; model: string | null; revision: number; live: number }): ReactElement {
     const [snapshot, setSnapshot] = useState<{ key: string; stats: PerformanceStats } | null>(null);
+    const shown = useRef("");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [retry, setRetry] = useState(0);
@@ -24,16 +26,20 @@ export default function PerformancePanel({ days, agent, model, revision }: { day
     useEffect(() => {
         let active = true;
         const controller = new AbortController();
-        setLoading(true);
-        setError("");
-        setShowAll(false);
+        const load = JSON.stringify([key, revision, retry]);
+        if (shown.current !== load) {
+            setLoading(true);
+            setError("");
+            setShowAll(false);
+        }
+        shown.current = load;
         void getPerformance(days, agent, model, controller.signal).then((value) => {
-            if (active) setSnapshot({ key, stats: value });
+            if (active) { setSnapshot({ key, stats: value }); setError(""); }
         }).catch((reason: unknown) => {
             if (active) setError(errorMessage(reason, "Could not load performance statistics."));
         }).finally(() => { if (active) setLoading(false); });
         return () => { active = false; controller.abort(); };
-    }, [days, agent, model, key, revision, retry]);
+    }, [days, agent, model, key, revision, retry, live]);
 
     const rows = (group === "model"
         ? (stats?.modelRows ?? []).map((row) => ({ metrics: row, name: row.registryModel || row.model || "Unknown model", detail: `${row.model || "Model ID not recorded"} · ${row.provider || "Provider not recorded"}`, identity: row.modelUid }))

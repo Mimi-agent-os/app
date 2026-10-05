@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 
 import { getUsage, getUsageDaily, type UsageDaily, type UsageStats } from "../api.ts";
@@ -30,6 +30,10 @@ interface ScopedUsage {
 export default function UsagePanel(): ReactElement {
     const [days, setDays] = useState(7);
     const [revision, setRevision] = useState(0);
+    // a recorded call, a new price, a reconnect or the owner's midnight: refetched in place, never shown as loading
+    const [live, setLive] = useState(0);
+    const shownTotals = useRef("");
+    const shownScope = useRef("");
     const [snapshot, setSnapshot] = useState<{ days: number; stats: UsageStats } | null>(null);
     const [daily, setDaily] = useState<{ days: number; value: UsageDaily } | null>(null);
     const [scoped, setScoped] = useState<ScopedUsage | null>(null);
@@ -55,46 +59,64 @@ export default function UsagePanel(): ReactElement {
     useEffect(() => {
         let active = true;
         const controller = new AbortController();
-        setLoading(true);
-        setDailyLoading(true);
-        setError("");
-        setDailyError("");
-        setSelectedDay(null);
+        const load = JSON.stringify([days, revision]);
+        if (shownTotals.current !== load) {
+            setLoading(true);
+            setDailyLoading(true);
+            setError("");
+            setDailyError("");
+            setSelectedDay(null);
+        }
+        shownTotals.current = load;
         void getUsage(days, "registry", controller.signal).then((value) => {
             if (value.agent !== null) throw new Error("The gateway returned usage for a different agent.");
-            if (active) setSnapshot({ days, stats: value });
+            if (active) { setSnapshot({ days, stats: value }); setError(""); }
         }).catch((reason: unknown) => {
             if (active) setError(errorMessage(reason, "Could not load usage totals."));
         }).finally(() => { if (active) setLoading(false); });
         void getUsageDaily(barDays, controller.signal).then((value) => {
             if (value.agent !== null) throw new Error("The gateway returned a daily trend for a different agent.");
-            if (active) setDaily({ days: barDays, value });
+            if (active) { setDaily({ days: barDays, value }); setDailyError(""); }
         }).catch((reason: unknown) => {
             if (active) setDailyError(errorMessage(reason, "Could not load the daily trend."));
         }).finally(() => { if (active) setDailyLoading(false); });
         return () => { active = false; controller.abort(); };
-    }, [days, barDays, revision]);
+    }, [days, barDays, revision, live]);
 
     useEffect(() => {
         if (agent === null) return;
         let active = true;
         const controller = new AbortController();
-        setSelectedDay(null);
-        setScoped((old) => ({ days, agent, stats: old?.days === days && old.agent === agent ? old.stats : null, daily: old?.days === days && old.agent === agent ? old.daily : null, loading: true, dailyLoading: true, error: "", dailyError: "" }));
+        const load = JSON.stringify([agent, days, revision]);
+        if (shownScope.current !== load) {
+            setSelectedDay(null);
+            setScoped((old) => ({ days, agent, stats: old?.days === days && old.agent === agent ? old.stats : null, daily: old?.days === days && old.agent === agent ? old.daily : null, loading: true, dailyLoading: true, error: "", dailyError: "" }));
+        }
+        shownScope.current = load;
         void getUsage(days, "registry", controller.signal, agent).then((value) => {
             if (value.agent !== agent) throw new Error("The gateway returned usage for a different agent.");
-            if (active) setScoped((old) => old ? { ...old, stats: value } : old);
+            if (active) setScoped((old) => old ? { ...old, stats: value, error: "" } : old);
         }).catch((reason: unknown) => {
             if (active) setScoped((old) => old ? { ...old, error: errorMessage(reason, "Could not refresh usage for this agent.") } : old);
         }).finally(() => { if (active) setScoped((old) => old ? { ...old, loading: false } : old); });
         void getUsageDaily(barDays, controller.signal, agent).then((value) => {
             if (value.agent !== agent) throw new Error("The gateway returned a daily trend for a different agent.");
-            if (active) setScoped((old) => old ? { ...old, daily: value } : old);
+            if (active) setScoped((old) => old ? { ...old, daily: value, dailyError: "" } : old);
         }).catch((reason: unknown) => {
             if (active) setScoped((old) => old ? { ...old, dailyError: errorMessage(reason, "Could not load this agent's daily trend.") } : old);
         }).finally(() => { if (active) setScoped((old) => old ? { ...old, dailyLoading: false } : old); });
         return () => { active = false; controller.abort(); };
-    }, [agent, days, barDays, revision]);
+    }, [agent, days, barDays, revision, live]);
+
+    useEffect(() => {
+        const refresh = (): void => setLive((value) => value + 1);
+        window.addEventListener("mimi:usage-changed", refresh);
+        window.addEventListener("mimi:resync", refresh);
+        return () => {
+            window.removeEventListener("mimi:usage-changed", refresh);
+            window.removeEventListener("mimi:resync", refresh);
+        };
+    }, []);
 
     const agents = [...new Set((globalStats ?? snapshot?.stats)?.rows.map((row) => row.agent) ?? [])].sort();
     const models = [...new Set((globalStats ?? snapshot?.stats)?.rows.map((row) => row.model) ?? [])].sort();
@@ -116,6 +138,14 @@ export default function UsagePanel(): ReactElement {
         : stats.days === 1 ? `Today, ${dayLabel(stats.day.today)} · resets at ${resetTime(stats.day)}`
         : `${dayLabel(stats.sinceDay)} – ${dayLabel(stats.day.today)}, ${stats.day.timeZone}`;
     const retry = (): void => setRevision((value) => value + 1);
+    const resetsAt = stats?.day.resetsAt;
+
+    // nothing is recorded at the owner's midnight, yet every figure here starts a new day
+    useEffect(() => {
+        if (!resetsAt) return;
+        const timer = setTimeout(() => setLive((value) => value + 1), Math.max(0, Date.parse(resetsAt) - Date.now()) + 1000);
+        return () => clearTimeout(timer);
+    }, [resetsAt]);
 
     return <section className="usage-panel" aria-label="Model usage">
         <header className="usage-header">
@@ -147,7 +177,7 @@ export default function UsagePanel(): ReactElement {
                 <div className="usage-token-labels"><span>Input <b>{number.format(totals.promptTokens)}</b> <small>{percentage(totals.promptTokens, spent)}</small></span><span>Output <b>{number.format(totals.completionTokens)}</b> <small>{percentage(totals.completionTokens, spent)}</small></span></div>
                 <div className="usage-token-track" role="img" aria-label={`${number.format(totals.promptTokens)} input tokens and ${number.format(totals.completionTokens)} output tokens`}><span style={{ width: `${spent ? totals.promptTokens / spent * 100 : 0}%` }} /><span style={{ width: `${spent ? totals.completionTokens / spent * 100 : 0}%` }} /></div>
             </div>
-            {totals.estimatedCalls > 0 && <p className="usage-note">Includes {number.format(totals.estimatedCalls)} estimated {plural(totals.estimatedCalls, "call", "calls")}: stopped or failed before the provider reported usage.</p>}
+            {totals.estimatedCalls > 0 && <p className="usage-note">Includes {number.format(totals.estimatedCalls)} estimated {plural(totals.estimatedCalls, "call", "calls")}: the provider had them but reported no usage.</p>}
             {rows.length === 0 && <Empty title={filtered ? "No matching usage" : "No usage yet"} icon="dash">{filtered ? "No recorded calls match these filters in this period." : "Model usage appears here after a call is recorded."}</Empty>}
         </>}
         {stats && <section className="usage-section" aria-label="Daily usage trend">
@@ -163,7 +193,7 @@ export default function UsagePanel(): ReactElement {
                     <p className="usage-note">{peakDay ? `Peak: ${dayLabel(peakDay.day)} · ${number.format(peak)} ${unit}. ` : "No recorded activity in this chart window. "}Daily average: {number.format(Math.round(trendTotal / bars.length))} {unit}.</p>
                 </>}
         </section>}
-        <PerformancePanel days={days} agent={agent} model={model} revision={revision} />
+        <PerformancePanel days={days} agent={agent} model={model} revision={revision} live={live} />
         {stats && totals && rows.length > 0 && <>
             <section className="usage-section" aria-label="Usage breakdown">
                 <div className="usage-section-heading"><h3>Where usage went</h3><div className="seg"><button type="button" aria-pressed={group === "agent"} className={group === "agent" ? "on" : ""} onClick={() => { setGroup("agent"); setShowAll(false); }}>By agent</button><button type="button" aria-pressed={group === "model"} className={group === "model" ? "on" : ""} onClick={() => { setGroup("model"); setShowAll(false); }}>By model</button></div></div>
@@ -181,7 +211,7 @@ export default function UsagePanel(): ReactElement {
         {stats && <details className="usage-details usage-accounting"><summary>What these numbers include</summary>
             <p>Spent is every token a provider processed: the whole prompt of each call, with the context it re-sends every time, plus the output, counted as if every model were a paid cloud one. It covers chats, the agents' own calls (routines, bridges, /ask), chat titles, compaction summaries and the model checks from Settings, Models, which belong to no agent.</p>
             <p>Cost is spent at each model's current price from Settings, Limits & prices, so a price change re-prices past usage too. A model without a price shows no cost.</p>
-            <p>An estimated call was stopped or failed after the provider had it, without a usage report. Its tokens are estimated from the text at about four characters a token, and they count toward spent, cost and the model's daily limit.</p>
+            <p>An estimated call reached the provider but ended without a usage report: it was stopped, it failed, or its server sends none. Its tokens are estimated from the text at about four characters a token, and they count toward spent, cost and the model's daily limit.</p>
             <p>A day is a calendar day in {stats.day.timeZone}, the gateway's time zone; today resets at {resetTime(stats.day)}. Unknown model means its ID was not recorded.</p>
         </details>}
     </section>;

@@ -193,6 +193,14 @@ function Shell(): ReactElement {
         };
     }, [reload, reloadRegistries, reloadApprovals, reloadDevices]);
 
+    // nothing is recorded at the owner's midnight, yet "today" starts over then
+    const resetsAt = snap?.day.resetsAt;
+    useEffect(() => {
+        if (!resetsAt) return;
+        const timer = setTimeout(() => void reload(), Math.max(0, Date.parse(resetsAt) - Date.now()) + 1000);
+        return () => clearTimeout(timer);
+    }, [resetsAt, reload]);
+
     useEffect(() => {
         if (agents) startAgentChats(agents.map((a) => a.name));
     }, [agents]);

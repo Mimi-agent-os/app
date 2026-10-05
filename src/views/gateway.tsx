@@ -103,8 +103,7 @@ function HealthPanel({
     const down = snap.agents.filter((a) => a.status === "approved" && a.health === "down");
     const approvals = [...waiting].sort((x, y) => x.deadline - y.deadline);
     const needs = down.length + approvals.length;
-    const spent = snap.agents.reduce((n, a) => n + a.tokensToday, 0);
-    const cost = snap.agents.reduce((n, a) => n + a.costToday, 0);
+    const { tokens: spent, cost } = snap.today;
 
     return (
         <>
@@ -890,7 +889,7 @@ function Settings({ snap, snapError, approvals, section, wide, waiting, onSectio
         ),
         access: waiting > 0 && <span className="settings-value warn">{waiting} waiting</span>,
         health: needs > 0 && <span className="settings-value warn">{needs} {plural(needs, "needs", "need")} you</span>,
-        usage: snap && <span className="settings-value">{kilo(snap.agents.reduce((n, a) => n + a.tokensToday, 0))} today</span>,
+        usage: snap && <span className="settings-value">{kilo(snap.today.tokens)} today</span>,
     };
 
     return (

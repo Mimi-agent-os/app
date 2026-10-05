@@ -1141,6 +1141,20 @@ export default function ModelsPanel(): ReactElement {
     // a check is a real call that spends tokens: the cards re-read today's spend after it, and keep the last one if that read fails
     const refreshSpend = useCallback((): Promise<void> => getUsage(1, "registry").then(setUsage, () => undefined), []);
 
+    // any recorded call or new price re-reads it too, and so does the owner's midnight, when nothing is recorded
+    const resetsAt = usage?.day.resetsAt;
+    useEffect(() => {
+        const refresh = (): void => void refreshSpend();
+        window.addEventListener("mimi:usage-changed", refresh);
+        window.addEventListener("mimi:resync", refresh);
+        const timer = resetsAt ? setTimeout(refresh, Math.max(0, Date.parse(resetsAt) - Date.now()) + 1000) : undefined;
+        return () => {
+            window.removeEventListener("mimi:usage-changed", refresh);
+            window.removeEventListener("mimi:resync", refresh);
+            clearTimeout(timer);
+        };
+    }, [refreshSpend, resetsAt]);
+
     /** Promise.allSettled, not a sequential chain — one bad probe must not abort the rest, and a
      *  sequential chain would charge every model its neighbours' latency. */
     const pingAll = useCallback(async (): Promise<void> => {

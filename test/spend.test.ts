@@ -145,10 +145,44 @@ test("no view calls the day UTC, keeps unique input or an agent budget, or says 
     }
 });
 
-test("the dashboard's total says it sums agents, with its cost beside it only when a model is priced", async () => {
+test("the dashboard's total is the gateway's own sum of every agent, a revoked one's too, its cost beside it only when a model is priced", async () => {
     const source = await readFile(new URL("../src/views/gateway.tsx", import.meta.url), "utf8");
-    assert.match(source, /snap\.agents\.reduce\(\(n, a\) => n \+ a\.tokensToday, 0\)/);
-    assert.match(source, /snap\.agents\.reduce\(\(n, a\) => n \+ a\.costToday, 0\)/);
+    assert.match(source, /const \{ tokens: spent, cost \} = snap\.today;/);
+    assert.match(source, /usage: snap && <span className="settings-value">\{kilo\(snap\.today\.tokens\)\} today<\/span>/, "the Settings row reads the same total");
+    assert.doesNotMatch(source, /snap\.agents\.reduce\(\(n, a\) => n \+ a\.(tokens|cost)Today/, "the roster is only who is pinned now");
     assert.match(source, /\{cost > 0 && <Metric value=\{usd\(cost\)\} label="cost today" \/>\}/);
     assert.match(source, /Input \+ output across every agent\{cost > 0 \? ", at current prices" : ""\}; Usage also counts model checks\. The day resets at \{resetTime\(snap\.day\)\}/);
+});
+
+test("every view that shows spend or cost refetches it in place on a recorded call, a new price and a reconnect", async () => {
+    const read = (view: string): Promise<string> => readFile(new URL(`../src/views/${view}.tsx`, import.meta.url), "utf8");
+    const listens = /window\.addEventListener\("mimi:usage-changed", refresh\);\n\s*window\.addEventListener\("mimi:resync", refresh\);/;
+    const usage = await read("usage");
+    assert.match(usage, listens);
+    assert.match(usage, /const refresh = \(\): void => setLive\(\(value\) => value \+ 1\);/);
+    assert.match(usage, /\}, \[days, barDays, revision, live\]\);/);
+    assert.match(usage, /\}, \[agent, days, barDays, revision, live\]\);/);
+    assert.match(usage, /<PerformancePanel days=\{days\} agent=\{agent\} model=\{model\} revision=\{revision\} live=\{live\} \/>/);
+    // only a new window or the Refresh button shows as loading: a live refetch never blanks the chart or drops the picked day
+    assert.match(usage, /if \(shownTotals\.current !== load\) \{\n\s*setLoading\(true\);\n\s*setDailyLoading\(true\);[\s\S]*?setSelectedDay\(null\);\n\s*\}/);
+    assert.match(usage, /if \(shownScope\.current !== load\) \{\n\s*setSelectedDay\(null\);/);
+    const performance = await read("performance");
+    assert.match(performance, /\}, \[days, agent, model, key, revision, retry, live\]\);/);
+    assert.match(performance, /if \(shown\.current !== load\) \{\n\s*setLoading\(true\);/);
+    const models = await read("models");
+    assert.match(models, /const refresh = \(\): void => void refreshSpend\(\);/);
+    assert.match(models, listens);
+});
+
+test("every today figure starts over at the owner's midnight, when nothing is recorded to say so", async () => {
+    const midnight = (call: string): RegExp =>
+        new RegExp(`setTimeout\\(${call}, Math\\.max\\(0, Date\\.parse\\(resetsAt\\) - Date\\.now\\(\\)\\) \\+ 1000\\)`);
+    const read = (path: string): Promise<string> => readFile(new URL(`../src/${path}`, import.meta.url), "utf8");
+    assert.match(await read("App.tsx"), midnight("\\(\\) => void reload\\(\\)"), "Health and the Settings row");
+    assert.match(await read("views/usage.tsx"), midnight("\\(\\) => setLive\\(\\(value\\) => value \\+ 1\\)"));
+    assert.match(await read("views/limits.tsx"), midnight("\\(\\) => setRevision\\(\\(value\\) => value \\+ 1\\)"));
+    assert.match(await read("views/models.tsx"), midnight("refresh"), "the Models cards' spent today");
+    for (const [path, source] of [["App.tsx", "snap?.day.resetsAt"], ["views/usage.tsx", "stats?.day.resetsAt"], ["views/limits.tsx", "day?.resetsAt"], ["views/models.tsx", "usage?.day.resetsAt"]]) {
+        assert.ok((await read(path!)).includes(`const resetsAt = ${source!};`), `${path} re-arms on each new day's reset`);
+    }
 });

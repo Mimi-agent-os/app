@@ -35,6 +35,14 @@ export default function LimitsPanel(): ReactElement {
 
     const day = rows?.[0]?.day;
     const reached = rows?.filter((row) => limitUse(row).reached).length ?? 0;
+    const resetsAt = day?.resetsAt;
+
+    // nothing is recorded at the owner's midnight, yet every limit starts over then
+    useEffect(() => {
+        if (!resetsAt) return;
+        const timer = setTimeout(() => setRevision((value) => value + 1), Math.max(0, Date.parse(resetsAt) - Date.now()) + 1000);
+        return () => clearTimeout(timer);
+    }, [resetsAt]);
 
     return (
         <>
