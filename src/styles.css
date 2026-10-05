@@ -82,12 +82,12 @@
   --scrim:color-mix(in oklab,var(--ink) 18%,transparent);
   --lift:0 0 0 1px var(--line-2),0 16px 40px -18px rgb(20 20 35/.22);
 }
-/* a phone: touch-sized controls and a restrained scale; text fields stay at 16px below, or iOS zooms on focus */
+/* a phone: touch-sized controls and text read at arm's length; text fields stay at 16px at least below, or iOS zooms on focus */
 @media (pointer:coarse){:root{
   --ctl-h:44px; --ctl-h-sm:36px; --row-h:44px; --head-h:56px;
-  --f-xs:400 11.5px/16px var(--sans); --f-sm:400 13px/18px var(--sans); --f-md:400 14.5px/20px var(--sans);
-  --f-body:400 15px/23px var(--sans); --f-lg:600 16px/22px var(--sans); --f-xl:600 20px/26px var(--sans);
-  --f-code:400 12.5px/18px var(--mono);
+  --f-xs:400 12.5px/17px var(--sans); --f-sm:400 14px/20px var(--sans); --f-md:400 15.5px/22px var(--sans);
+  --f-body:400 16.5px/25px var(--sans); --f-lg:600 17.5px/24px var(--sans); --f-xl:600 22px/28px var(--sans);
+  --f-code:400 13.5px/20px var(--mono);
 }}
 
 /* ── base ──────────────────────────────────────────────────────────────────── */
