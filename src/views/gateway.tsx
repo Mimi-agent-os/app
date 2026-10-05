@@ -736,17 +736,20 @@ function InstancePanel(): ReactElement {
                       : {
                             actions: (
                                 <>
-                                    {/* the desktop shows banners without asking, and a failed one is otherwise silent */}
+                                    {/* the desktop shows banners without asking, and a failed one is otherwise silent; macOS shows no
+                                        banner for the app in front, so the test waits for the owner to switch away */}
                                     {inTauri && !androidApp && (
                                         <Btn
                                             kind="quiet"
                                             sm
                                             onClick={() => {
-                                                setTestNote("");
-                                                tauriInvoke()?.("notify", { title: "mimi", body: "System notifications work." }).then(
-                                                    () => setTestNote("Sent. If no banner showed, allow mimi in System Settings > Notifications and check Focus."),
-                                                    (e: unknown) => setTestNote(`Could not send: ${errorMessage(e)}`),
-                                                );
+                                                setTestNote("Switch to another app: a test banner comes in 5 seconds.");
+                                                setTimeout(() => {
+                                                    tauriInvoke()?.("notify", { title: "mimi", body: "System notifications work." }).then(
+                                                        () => setTestNote("Sent. No banner? Allow mimi in System Settings > Notifications, style Banners, and turn Focus off."),
+                                                        (e: unknown) => setTestNote(`Could not send: ${errorMessage(e)}`),
+                                                    );
+                                                }, 5000);
                                             }}
                                         >
                                             Send a test
