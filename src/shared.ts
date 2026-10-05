@@ -139,8 +139,13 @@ export function countdown(ms: number): string {
 }
 
 /** 128000 → «128k», 32768 → «32.8k»: the fraction is carried only when there is one. */
+/** A compact token count: 950, 8k, 12.5k, 1.62M. */
 export const kilo = (n: number): string =>
-    n >= 1000 ? `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k` : String(n);
+    n >= 999_950
+        ? `${Number((n / 1_000_000).toFixed(2))}M`
+        : n >= 1000
+          ? `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k`
+          : String(n);
 
 export const number = new Intl.NumberFormat("en-US");
 

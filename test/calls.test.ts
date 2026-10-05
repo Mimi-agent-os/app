@@ -101,6 +101,7 @@ test("the Calls list refetches in place on a recorded call or a new price, and n
 
 test("a call row says what was sent and what came out, its cost only when the model is priced, and never undefined", () => {
     assert.equal(tokens(call(1, { promptTokens: 8000, completionTokens: 400 }), kilo, usd), "8k in → 400 out", "an unpriced model shows no $0.00");
+    assert.deepEqual([950, 8000, 12_500, 999_949, 999_950, 1_619_802, 2_000_000, 12_345_678].map(kilo), ["950", "8k", "12.5k", "999.9k", "1M", "1.62M", "2M", "12.35M"]);
     assert.equal(tokens(call(1, { promptTokens: 8000, completionTokens: 400, cost: 0.036 }), kilo, usd), "8k in → 400 out · $0.04");
     assert.equal(tokens(call(2, { promptTokens: 7000, completionTokens: 120, usageEstimated: true, cost: 0.0042 }), kilo, usd), "≈7k in → ≈120 out · ≈$0.0042, estimated");
     assert.equal(tokens(call(3, { promptTokens: null, completionTokens: null, finishReason: "error" }), kilo, usd), "no usage reported");
