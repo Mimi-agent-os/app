@@ -17,7 +17,8 @@
 
 @media (max-width:900px){
   .menu-scrim{display:block;position:fixed;inset:0;z-index:var(--z-menu);background:var(--scrim)}
-  .menu{left:var(--s2);right:var(--s2);top:auto;bottom:max(var(--s2),var(--in-b));max-width:none;padding:var(--s2);z-index:calc(var(--z-menu) + 1)}
+  /* flush with the bottom and the sides, its ground under the gesture bar */
+  .menu{left:0;right:0;top:auto;bottom:0;max-width:none;max-height:calc(100dvh - var(--in-t) - var(--s6));padding:var(--s3) var(--s2) calc(var(--s3) + var(--in-b));border-radius:var(--r3) var(--r3) 0 0;z-index:calc(var(--z-menu) + 1)}
   .menu-item{height:44px}
 }
 

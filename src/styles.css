@@ -89,6 +89,8 @@
   --f-body:400 17.5px/26px var(--sans); --f-lg:600 18.5px/25px var(--sans); --f-xl:600 23px/29px var(--sans);
   --f-code:400 14px/21px var(--mono);
 }}
+/* the phone layout casts no shadow: a floating layer is a surface step and a hairline, with the scrim behind it when it is modal */
+@media (max-width:900px){:root,:root[data-theme=light]{--lift:0 0 0 1px var(--line-2)}}
 
 /* ── base ──────────────────────────────────────────────────────────────────── */
 
@@ -226,7 +228,8 @@ kbd{display:inline-flex;align-items:center;height:18px;padding:0 5px;border:1px 
 .palette-footer{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s4);padding:var(--s2) var(--s4);border-top:1px solid var(--line);font:var(--f-xs);color:var(--ink-3)}
 @media (pointer:coarse){.opt{height:var(--row-h)} .palette input[type=text]{font-size:17px}}
 @media (max-width:900px){
-  .palette{top:var(--in-t);width:100%;max-height:calc(var(--vvh,100dvh) - var(--in-t) - var(--s6));border-radius:0 0 var(--r2) var(--r2)}
+  /* a sheet from the top edge, its ground under the clock like a header's; it ends at the bottom bar's top edge, the whole bar a tap-out under the scrim */
+  .palette{top:0;width:100%;max-height:calc(var(--vvh,100dvh) - 1px - var(--s1) - 48px - max(var(--s1),var(--in-b)));padding-top:var(--in-t);border-radius:0 0 var(--r3) var(--r3)}
   .palette-footer{display:none}
 }
 
@@ -235,8 +238,12 @@ kbd{display:inline-flex;align-items:center;height:18px;padding:0 5px;border:1px 
 .toast{position:fixed;left:0;right:0;bottom:max(24px,calc(var(--in-b) + 12px));z-index:var(--z-toast);display:flex;align-items:center;gap:var(--s3);width:max-content;max-width:calc(100vw - 28px);margin-inline:auto;padding:10px 14px;border-radius:var(--r2);background:var(--panel-2);box-shadow:var(--lift);font:var(--f-sm);overflow-wrap:anywhere;opacity:0;translate:0 8px;pointer-events:none}
 .toast.on{opacity:1;translate:0 0;pointer-events:auto}
 .toast .u{flex:none;min-height:24px;padding:0;border:0;background:none;color:var(--accent);font:inherit;font-weight:600;cursor:pointer}
-/* under the phone header, never over its ‹ and ⋯ */
-@media (max-width:900px){.toast{top:calc(var(--in-t) + var(--head-h) + var(--s2));bottom:auto;translate:0 -8px}}
+/* a strip hung from the phone header's bottom edge (layout.css names it), never over its ‹ and ⋯ and with no cut content above it; the fixed offset is for an engine without anchor() */
+@media (max-width:900px){
+  .toast{left:var(--in-l);right:var(--in-r);top:calc(var(--in-t) + var(--head-h));top:anchor(--screen-head bottom,calc(var(--in-t) + var(--head-h)));bottom:auto;width:auto;max-width:none;margin:0;justify-content:space-between;padding-inline:var(--s4);border-radius:0;border-bottom:1px solid var(--line-2);background:var(--panel-3);box-shadow:none;translate:none}
+  /* the accent is 4.2:1 on light --panel-3 */
+  :root[data-theme=light] .toast .u{color:var(--ink)}
+}
 
 /* ── pairing: the first screen of a device that has no session ─────────────── */
 

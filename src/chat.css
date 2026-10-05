@@ -249,6 +249,10 @@
   .thread{padding-left:var(--s4);padding-right:var(--s4)}
   .chat-dock{padding-left:var(--s2);padding-right:var(--s2);padding-bottom:max(var(--s3),var(--in-b))}
   .msg[data-speaker=human]{max-width:92%}
+  .to-bottom{background:var(--panel-3)}
+  /* the command list grows out of the composer's top edge: one outline, a hairline between them */
+  .slash-menu{left:-1px;right:-1px;bottom:100%;border:1px solid;border-color:inherit;border-bottom-color:var(--line);border-radius:var(--r2) var(--r2) 0 0;box-shadow:none}
+  .composer:has(> .slash-menu){border-start-start-radius:0;border-start-end-radius:0}
 }
 /* the phone scale sets message text at 15px; a text field stays at 16px, or iOS zooms on focus */
 @media (pointer:coarse){.composer textarea,.msg-edit textarea,.queue-text{font-size:17px}}

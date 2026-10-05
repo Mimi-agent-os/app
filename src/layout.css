@@ -195,6 +195,8 @@ html,body,#root{height:100%;overflow:hidden}
     .app[data-bar=off]>.bar,.app:has(.work :is(input:not([type=checkbox],[type=radio],[type=range]),textarea):focus)>.bar{display:none}
 
     .head{padding:var(--in-t) var(--s2) 0;min-height:calc(var(--head-h) + var(--in-t));background:var(--panel)}
+    /* the toast hangs from whichever header is on screen (styles.css) */
+    .home-head,.work .head{anchor-name:--screen-head}
     .head .head-back{display:inline-flex}
     /* a place's root (Inbox, the Settings index) has no ‹ to lead its title */
     .head:not(:has(> .head-back)){padding-left:var(--s4)}
@@ -205,7 +207,7 @@ html,body,#root{height:100%;overflow:hidden}
     /* a prompt sits high, where the soft keyboard cannot cover its buttons */
     .dlg:has(> input){align-self:start;margin-top:calc(var(--in-t) + 10vh)}
     /* a modal is the whole screen: floating at 4vh it would sit under the status bar */
-    .modal{inset:0;border-radius:0;padding:var(--in-t) var(--in-r) var(--in-b) var(--in-l)}
+    .modal{inset:0;border-radius:0;padding:var(--in-t) var(--in-r) var(--in-b) var(--in-l);box-shadow:none}
     .page{padding:var(--s4) var(--s4) var(--s7)}
 }
 
