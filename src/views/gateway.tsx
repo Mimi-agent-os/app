@@ -624,6 +624,7 @@ const THEMES: readonly { v: ThemeChoice; t: string }[] = [
 function InstancePanel(): ReactElement {
     const [choice, setChoice] = useState<ThemeChoice>(themeChoice);
     const [notifyOn, setNotifyOn] = useState(notifyEnabled);
+    const [testNote, setTestNote] = useState("");
     const [devOn, setDevOn] = useState(devDetails);
     const [perm, setPerm] = useState<NotificationPermission | "unsupported">(() =>
         typeof Notification === "undefined" ? "unsupported" : Notification.permission,
@@ -700,6 +701,7 @@ function InstancePanel(): ReactElement {
                                 ? "the window is in the background or, on a Mac, closed to the Dock"
                                 : "this tab is hidden or its window is in the background"}.`}{" "}
                         In-app toasts are always on.
+                        {testNote && <Where>{testNote}</Where>}
                         <Where>
                             {inTauri
                                 ? (androidApp ? "Delivered through the app" : "Delivered through the desktop app")
@@ -733,22 +735,40 @@ function InstancePanel(): ReactElement {
                         }
                       : {
                             actions: (
-                                <div className="seg">
-                                    <button
-                                        type="button"
-                                        className={notifyOn ? "on" : ""}
-                                        onClick={() => setNotify(true)}
-                                    >
-                                        On
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className={notifyOn ? "" : "on"}
-                                        onClick={() => setNotify(false)}
-                                    >
-                                        Off
-                                    </button>
-                                </div>
+                                <>
+                                    {/* the desktop shows banners without asking, and a failed one is otherwise silent */}
+                                    {inTauri && !androidApp && (
+                                        <Btn
+                                            kind="quiet"
+                                            sm
+                                            onClick={() => {
+                                                setTestNote("");
+                                                tauriInvoke()?.("notify", { title: "mimi", body: "System notifications work." }).then(
+                                                    () => setTestNote("Sent. If no banner showed, allow mimi in System Settings > Notifications and check Focus."),
+                                                    (e: unknown) => setTestNote(`Could not send: ${errorMessage(e)}`),
+                                                );
+                                            }}
+                                        >
+                                            Send a test
+                                        </Btn>
+                                    )}
+                                    <div className="seg">
+                                        <button
+                                            type="button"
+                                            className={notifyOn ? "on" : ""}
+                                            onClick={() => setNotify(true)}
+                                        >
+                                            On
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className={notifyOn ? "" : "on"}
+                                            onClick={() => setNotify(false)}
+                                        >
+                                            Off
+                                        </button>
+                                    </div>
+                                </>
                             ),
                         })}
             />
