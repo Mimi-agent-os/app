@@ -85,9 +85,9 @@
 /* a phone: touch-sized controls and text read at arm's length; text fields stay at 16px at least below, or iOS zooms on focus */
 @media (pointer:coarse){:root{
   --ctl-h:44px; --ctl-h-sm:36px; --row-h:44px; --head-h:56px;
-  --f-xs:400 12.5px/17px var(--sans); --f-sm:400 14px/20px var(--sans); --f-md:400 15.5px/22px var(--sans);
-  --f-body:400 16.5px/25px var(--sans); --f-lg:600 17.5px/24px var(--sans); --f-xl:600 22px/28px var(--sans);
-  --f-code:400 13.5px/20px var(--mono);
+  --f-xs:400 13.5px/18px var(--sans); --f-sm:400 15px/21px var(--sans); --f-md:400 16.5px/23px var(--sans);
+  --f-body:400 17.5px/26px var(--sans); --f-lg:600 18.5px/25px var(--sans); --f-xl:600 23px/29px var(--sans);
+  --f-code:400 14px/21px var(--mono);
 }}
 
 /* ── base ──────────────────────────────────────────────────────────────────── */
@@ -147,7 +147,7 @@ input[type=text],input[type=search],input[type=password],select{height:var(--ctl
 input[type=search]{appearance:none}
 select{max-width:100%}
 input[type=checkbox],input[type=radio]{accent-color:var(--ink)}
-@media (pointer:coarse){input[type=text],input[type=search],input[type=password],textarea,select{font-size:16px}}
+@media (pointer:coarse){input[type=text],input[type=search],input[type=password],textarea,select{font-size:17px}}
 kbd{display:inline-flex;align-items:center;height:18px;padding:0 5px;border:1px solid var(--line-2);border-radius:var(--r0);font:500 11px/1 var(--mono);color:var(--ink-3)}
 @media (pointer:coarse){kbd,.composer-hint{display:none}}
 
@@ -224,7 +224,7 @@ kbd{display:inline-flex;align-items:center;height:18px;padding:0 5px;border:1px 
 .opt-detail{flex:0 1 auto;min-width:0;max-width:45%;margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--f-xs);color:var(--ink-3)}
 .opt .k{flex:none;margin-left:auto} .opt-detail+.k{margin-left:0}
 .palette-footer{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s4);padding:var(--s2) var(--s4);border-top:1px solid var(--line);font:var(--f-xs);color:var(--ink-3)}
-@media (pointer:coarse){.opt{height:var(--row-h)} .palette input[type=text]{font-size:16px}}
+@media (pointer:coarse){.opt{height:var(--row-h)} .palette input[type=text]{font-size:17px}}
 @media (max-width:900px){
   .palette{top:var(--in-t);width:100%;max-height:calc(var(--vvh,100dvh) - var(--in-t) - var(--s6));border-radius:0 0 var(--r2) var(--r2)}
   .palette-footer{display:none}

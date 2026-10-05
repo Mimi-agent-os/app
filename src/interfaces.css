@@ -28,4 +28,4 @@
   .interfaces-app-choice select{max-width:min(230px,calc(100vw - 52px))}
   .interfaces-frame,.interfaces-skel{min-height:240px}
 }
-@media (pointer:coarse){.interfaces-app-choice select{font-size:16px}}
+@media (pointer:coarse){.interfaces-app-choice select{font-size:17px}}

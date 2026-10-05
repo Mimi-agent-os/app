@@ -25,4 +25,4 @@
   .limit-hint{padding-top:0;flex-basis:100%}
   .limit-acts{margin-left:0}
 }
-@media (pointer:coarse){.limit-fields input{font-size:16px}}
+@media (pointer:coarse){.limit-fields input{font-size:17px}}

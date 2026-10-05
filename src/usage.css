@@ -68,4 +68,4 @@
   .usage-periods{width:100%}
   .usage-periods button{flex:1;padding-left:var(--s2);padding-right:var(--s2)}
 }
-@media (pointer:coarse){.usage-filter-row select{font-size:16px}}
+@media (pointer:coarse){.usage-filter-row select{font-size:17px}}

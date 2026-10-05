@@ -251,7 +251,7 @@
   .msg[data-speaker=human]{max-width:92%}
 }
 /* the phone scale sets message text at 15px; a text field stays at 16px, or iOS zooms on focus */
-@media (pointer:coarse){.composer textarea,.msg-edit textarea,.queue-text{font-size:16px}}
+@media (pointer:coarse){.composer textarea,.msg-edit textarea,.queue-text{font-size:17px}}
 
 /* motion: only your sent message rises in; history and streamed text never animate */
 @media (prefers-reduced-motion:no-preference){
