@@ -39,7 +39,7 @@ import { agentState, openEmptyChat, refreshAgent, useChats } from "../agent-chat
 import { useInterfaces, type AgentApp } from "../app-api.ts";
 import { resolveApproval } from "../approval-api.ts";
 import { ApiError, getSnapshot } from "../channel.ts";
-import type { ChatChangedDetail } from "../events.ts";
+import type { ApprovalResolvedEvent, ChatChangedDetail } from "../events.ts";
 import { useChatActions } from "../components/chat-row.tsx";
 import { useDialog } from "../components/dialog.tsx";
 import { Icon } from "../components/icon.tsx";
@@ -78,8 +78,9 @@ const HISTORY_CACHE_MAX = 24;
 
 // ── the thread model ─────────────────────────────────────────────────────────
 
-// `partial`: a batch answered call by call, where neither "allowed" nor "denied" is the truth
-type GateState = "open" | "allowed" | "denied" | "partial" | "expired";
+// `partial`: a batch answered call by call, where neither "allowed" nor "denied" is the truth; `elsewhere`: allowed on another
+// device, with which calls unknown here; `cancelled`: the turn stopped before anyone answered
+type GateState = "open" | "allowed" | "denied" | "partial" | "expired" | "cancelled" | "elsewhere";
 
 /** One approval of a whole tool batch; `key` is the server's gate id, echoed back with the decisions. */
 interface Gate {
@@ -141,6 +142,8 @@ interface Turn {
     /** How the turn ended when that deserves a line of its own, like a stop. */
     status?: string;
     meta?: HistoryMessage["meta"];
+    /** Per open gate, the ticks the owner had set before a re-attach replays the turn. */
+    held?: Record<string, Record<string, boolean>>;
 }
 
 // the loop's own stop marker, shown as the turn's status line instead of bracketed text in the reply
@@ -226,7 +229,7 @@ function fold(t: Turn, ev: TurnEvent): Turn {
                         id: uid(),
                         key: ev.gate,
                         actions: ev.actions,
-                        picks: allOf(ev.actions, true),
+                        picks: t.held?.[ev.gate] ?? allOf(ev.actions, true),
                         decisions: {},
                         deadline: ev.deadline,
                         state: "open",
@@ -234,12 +237,14 @@ function fold(t: Turn, ev: TurnEvent): Turn {
                 }],
             };
         case "approval_resolved":
-            // on a replay this is the only thing that stops an answered gate from rendering as open
+            // on a replay this is the only thing that stops an answered gate from rendering as open; it also overrules this
+            // device's own guess, since another device may have answered first
             return {
                 ...t,
                 segments: t.segments.map((s) =>
-                    s.kind === "gate" && s.gate.key === ev.gate && s.gate.state === "open"
-                        ? { ...s, gate: { ...s.gate, decisions: ev.decisions, picks: ev.decisions, state: settled(s.gate.actions, ev.decisions) } }
+                    s.kind === "gate" && s.gate.key === ev.gate
+                        ? { ...s, gate: { ...s.gate, decisions: ev.decisions, picks: ev.decisions,
+                            state: ev.outcome === "expired" ? "expired" : ev.outcome === "gone" ? "cancelled" : settled(s.gate.actions, ev.decisions) } }
                         : s,
                 ),
             };
@@ -534,6 +539,8 @@ const HEAD: Record<GateState, string> = {
     denied: "Denied",
     partial: "Partly allowed",
     expired: "Expired",
+    cancelled: "Cancelled",
+    elsewhere: "Answered elsewhere",
 };
 
 const OUTCOME: Record<GateState, string> = {
@@ -541,7 +548,9 @@ const OUTCOME: Record<GateState, string> = {
     allowed: "Everything below went ahead with these arguments.",
     denied: "Nothing below ran. The agent learned of the refusal and carried on without it.",
     partial: "The ticked calls went ahead. The agent got their results and a refusal for the rest, and carried on from there.",
-    expired: "Nobody answered in time, so the gateway denied the whole batch. Nothing below ran.",
+    expired: "Nobody answered in time, so nothing below ran. The agent was told the request expired.",
+    cancelled: "The turn stopped before anyone answered. Nothing below ran.",
+    elsewhere: "Answered on another device, so this one cannot tell which calls ran. The agent's reply says.",
 };
 
 /** Open: every call with its exact arguments and one pair of buttons for the batch. Answered: the same card, kept as the record of what ran. */
@@ -556,11 +565,11 @@ function GateCard({ gate, now, onToggle, onAnswer }: {
     const many = gate.actions.length > 1;
     const label = many ? `${gate.actions.length} calls` : (gate.actions[0]?.tool ?? "");
     const left = gate.deadline - now;
-    // a passed deadline is already decided server-side; buttons would only offer clicks that 409
-    const state: GateState = gate.state === "open" && left <= 0 ? "expired" : gate.state;
+    const state = gate.state;
 
     if (state !== "open") {
         const allowed = (a: GateAction): boolean => state === "allowed" || (state === "partial" && (gate.decisions[a.id] ?? false));
+        const refused = state === "denied" || state === "partial";
         return (
             <div className="gate resolved">
                 <div className="gh">
@@ -569,14 +578,16 @@ function GateCard({ gate, now, onToggle, onAnswer }: {
                 </div>
                 <div className="gb">
                     <p className="gate-note">{OUTCOME[state]}</p>
-                    <ul className="gate-verdicts">
-                        {gate.actions.map((a) => (
-                            <li key={a.id}>
-                                <span className="mono">{a.tool}</span>
-                                <span data-allowed={allowed(a) || undefined}>{allowed(a) ? "allowed" : "refused"}</span>
-                            </li>
-                        ))}
-                    </ul>
+                    {state !== "elsewhere" && (
+                        <ul className="gate-verdicts">
+                            {gate.actions.map((a) => (
+                                <li key={a.id}>
+                                    <span className="mono">{a.tool}</span>
+                                    <span data-allowed={allowed(a) || undefined}>{allowed(a) ? "allowed" : refused ? "refused" : "not run"}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                     <Disclose flush summary={many ? "Show the full calls" : "Show the full call"}>{whole}</Disclose>
                 </div>
             </div>
@@ -626,14 +637,15 @@ function GateCard({ gate, now, onToggle, onAnswer }: {
                     })}
                 </div>
                 <Disclose flush summary={many ? "Show the full calls" : "Show the full call"}>{whole}</Disclose>
-                <div className="btns">
+                {/* the gateway decides a passed deadline, by its own clock: the card waits for its word, not this device's guess */}
+                {left <= 0 ? <p className="gate-note">Time is up. Waiting for the gateway to close the request.</p> : <div className="btns">
                     <Btn kind="primary" disabled={picked === 0} title={picked === 0 ? "Nothing is ticked. Deny is for that." : undefined} onClick={() => onAnswer(gate.picks)}>
                         {picked === gate.actions.length ? "Allow" : `Allow ${picked} of ${gate.actions.length}`}
                     </Btn>
                     <Btn kind="danger" onClick={() => onAnswer(allOf(gate.actions, false))}>{many ? "Deny all" : "Deny"}</Btn>
                     {/* only ⌘⏎ is advertised: Escape is refused while focus is in a field, and the composer usually has it */}
                     <span className="hint">Allow <kbd>⌘⏎</kbd></span>
-                </div>
+                </div>}
             </div>
         </div>
     );
@@ -1335,7 +1347,12 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
                         completion = ev;
                     }
                     if (ev.type === "error") run.failed = true;
-                    patchTurn(turnId, (t) => fold(fresh ? { ...t, segments: [] } : t, ev));
+                    // the replay rebuilds each open card, which must come back with the owner's ticks, not all of them
+                    patchTurn(turnId, (t) => fold(fresh ? {
+                        ...t,
+                        segments: [],
+                        held: Object.fromEntries(t.segments.flatMap((s) => s.kind === "gate" && s.gate.state === "open" ? [[s.gate.key, s.gate.picks]] : [])),
+                    } : t, ev));
                 }
             } catch (e) {
                 broke = e;
@@ -1622,18 +1639,34 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
             const gone = e instanceof ApiError && e.status === 409;
             const lapsed = gate.deadline - Date.now() <= 0;
             setNotice(gone
-                ? lapsed ? "Too late. That gate had already expired and the gateway denied it." : "That gate was already answered elsewhere. The first answer counts."
+                ? lapsed ? "Too late. That gate had already expired and nothing ran." : "That gate was already answered elsewhere. The first answer counts."
                 : `The answer did not go through: ${errorMessage(e)}`);
             patchTurn(turnId, (t) => {
                 if (!gone && !t.running) return t;
-                if (gone && !lapsed) return t;
+                const state: GateState = !gone ? "open" : lapsed ? "expired" : "elsewhere";
                 return {
                     ...t,
-                    segments: t.segments.map((s) => (s.kind === "gate" && s.gate.id === gate.id ? { ...s, gate: { ...s.gate, state: gone ? "expired" : "open", decisions: {} } } : s)),
+                    // only this device's own guess is taken back: the gateway's word may already have replaced it (a new decisions object)
+                    segments: t.segments.map((s) => (s.kind === "gate" && s.gate.id === gate.id && s.gate.decisions === decisions ? { ...s, gate: { ...s.gate, state, decisions: {} } } : s)),
                 };
             });
         });
     }, [patchTurn]);
+
+    // the gateway's word on a gate whose turn stream never brought it here (a dropped stream): settled by gate id
+    useEffect(() => {
+        const onResolved = (e: Event): void => {
+            const ev = (e as CustomEvent<ApprovalResolvedEvent | undefined>).detail;
+            if (ev?.type !== "approval_resolved") return;
+            const state: GateState = ev.outcome === "expired" ? "expired" : ev.outcome === "gone" ? "cancelled" : ev.outcome === "denied" ? "denied" : "elsewhere";
+            setLive((list) => list.map((it) => it.kind !== "turn" || !it.segments.some((s) => s.kind === "gate" && s.gate.key === ev.gate && s.gate.state === "open") ? it : {
+                ...it,
+                segments: it.segments.map((s) => s.kind === "gate" && s.gate.key === ev.gate && s.gate.state === "open" ? { ...s, gate: { ...s.gate, state } } : s),
+            }));
+        };
+        window.addEventListener("mimi:approvals-changed", onResolved);
+        return () => window.removeEventListener("mimi:approvals-changed", onResolved);
+    }, []);
 
     const settle = useCallback<OnSettle>((turnId, gate, outcome, answers) => {
         patchTurn(turnId, (t) => ({

@@ -56,7 +56,8 @@ export function announceApproval(event: ApprovalEvent, toast: ShowToast): void {
     if (!document.hidden && onIt) return;
     const count = burst?.up() ? burst.count + 1 : 1;
     // an ask or a return gate carries a label in `tool`, so the words never claim a tool is run
-    const ask = event.kind === "question" ? "asks you a question" : `needs your approval: ${flat(event.tool)}`;
+    const more = event.actions > 1 ? ` and ${event.actions - 1} more` : "";
+    const ask = event.kind === "question" ? "asks you a question" : `needs your approval: ${flat(event.tool)}${more}`;
     const review = (): void => go(count === 1 ? target : { at: "inbox" });
     const headline = count === 1 ? `${event.agent} ${ask}` : `${count} requests waiting`;
     burst = { up: toast(headline, { label: count === 1 && event.kind === "question" ? "Answer" : "Review", run: review }), count };

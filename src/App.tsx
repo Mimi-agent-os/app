@@ -337,7 +337,8 @@ function Shell(): ReactElement {
             out.push({
                 id: `needs:${a.gate}`,
                 label: inChat ? chats.get(a.agent)?.rows?.find((c) => c.id === a.conversation)?.title ?? "Untitled" : a.label,
-                detail: a.kind === "question" ? (inChat ? a.label : a.agent) : `${a.agent} · ${a.tool}`,
+                detail: a.kind === "question" ? (inChat ? a.label : a.agent)
+                    : `${a.agent} · ${a.tool}${a.actions.length > 1 ? ` and ${a.actions.length - 1} more` : ""}`,
                 group: "needs",
                 dot: "degraded",
                 keywords: a.kind === "question" ? `question answer ${a.label}` : `approval allow ${a.label}`,

@@ -276,8 +276,8 @@ export type TurnEvent =
           /** Epoch ms; server-authoritative, so a replay after reload counts down the real remaining time, not a fresh 5:00. */
           deadline: number;
       }
-    /** Keyed by action id. Needed for the replay log: a page that re-attaches mid-turn rebuilds the thread from the log alone, and without this an answered gate would replay as still-waiting and re-answering it would 409. */
-    | { type: "approval_resolved"; gate: string; decisions: Record<string, boolean> }
+    /** Keyed by action id. Needed for the replay log: a page that re-attaches mid-turn rebuilds the thread from the log alone, and without this an answered gate would replay as still-waiting and re-answering it would 409. `outcome` tells an expiry or a cancel from a Deny, which all-false decisions cannot. */
+    | { type: "approval_resolved"; gate: string; outcome: "approved" | "denied" | "expired" | "gone"; decisions: Record<string, boolean> }
     /** ask_owner parks the turn on a question gate, answered on POST /approvals/:gate/reply; both replay on attach like an approval. */
     | QuestionRequiredEvent
     | QuestionResolvedEvent

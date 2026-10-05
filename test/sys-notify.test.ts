@@ -49,7 +49,7 @@ const toast = (text: string, action?: { label: string; run: () => void }): (() =
     toasts.push(row);
     return () => row.up;
 };
-const gate = (over: Record<string, unknown>) => ({ type: "approval", kind: "approval", agent: "alpha", session: 3, tool: "send_email", ...over }) as
+const gate = (over: Record<string, unknown>) => ({ type: "approval", kind: "approval", agent: "alpha", session: 3, gate: "g-3", tool: "send_email", actions: 1, ...over }) as
     Parameters<typeof announceApproval>[0];
 
 const item = (over: Record<string, unknown>) => ({
@@ -109,6 +109,12 @@ test("an approval is headed by the agent, with the label it picked flattened, in
     assert.deepEqual(toasts.map((row) => row.text), ["alpha needs your approval: send Gateway: approve"]);
     assert.deepEqual(shown, [{ title: "alpha", body: "needs your approval: send Gateway: approve" }]);
     assert.deepEqual(tags, ["mimi-approval"], "one shared tag, so a new banner replaces the last");
+});
+
+test("a batch gate says how many calls wait, not just its first one", () => {
+    announceApproval(gate({ tool: "calendar_create_event", actions: 4 }), toast);
+    assert.deepEqual(toasts.map((row) => row.text), ["alpha needs your approval: calendar_create_event and 3 more"]);
+    assert.deepEqual(shown, [{ title: "alpha", body: "needs your approval: calendar_create_event and 3 more" }]);
 });
 
 test("a question says it asks, never that a tool waits for approval, and its toast offers Answer", () => {

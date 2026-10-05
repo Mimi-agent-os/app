@@ -18,8 +18,11 @@ export interface ApprovalEvent {
     agent: string;
     session: number | null;
     room?: string | number;
-    gate?: string;
+    gate: string;
+    /** The first call's tool, or the label of an ask. */
     tool: string;
+    /** How many calls the gate holds; 0 on a question. */
+    actions: number;
 }
 interface DeviceEnrolledEvent {
     type: "device_enrolled";
@@ -50,7 +53,7 @@ interface InteractionEvent {
     kind: "delegate";
     status: string;
 }
-interface ApprovalResolvedEvent {
+export interface ApprovalResolvedEvent {
     type: "approval_resolved";
     gate: string;
     outcome: string;
