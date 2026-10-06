@@ -167,6 +167,7 @@ function ComposerView({
         if (result === "sent") setImages([]);
         if (result === "sent" || result === "queued") write("");
         if (result === "queued" && images.length > 0) onNotice("A queued message carries text only. The images stay in the box for your next message.");
+        if (result === "refused" && busy && !draft.trim() && images.length > 0) onNotice("A queued message carries text only. The images stay in the box until this turn ends.");
     };
 
     /** Stages what fits; whatever is dropped is said out loud rather than silently discarded. */

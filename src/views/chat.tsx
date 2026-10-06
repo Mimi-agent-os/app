@@ -466,7 +466,6 @@ const Bubble = memo(function Bubble({ speaker, who, text, md, images, at, head =
                 </header>
             )}
             <div className="msg-body">
-                {md ? <Markdown text={text} /> : text}
                 {images && images.length > 0 && (
                     <div className="chat-images">
                         {images.map((src, i) => (
@@ -479,6 +478,7 @@ const Bubble = memo(function Bubble({ speaker, who, text, md, images, at, head =
                         ))}
                     </div>
                 )}
+                {text && (md ? <Markdown text={text} /> : <span>{text}</span>)}
             </div>
             {speaker === "human" && (
                 <footer className="msg-foot">
@@ -820,8 +820,8 @@ const PastThread = memo(function PastThread({ agent, items, editing, canEdit, on
                         images={it.images}
                         at={it.at}
                         editId={it.id}
-                        // only while nothing runs: truncating under a live turn would delete rows it is still writing
-                        onEdit={canEdit && speaker === "human" ? onEdit : undefined}
+                        // only while nothing runs (truncating under a live turn would delete rows it is still writing), and only words can be edited
+                        onEdit={canEdit && speaker === "human" && it.text ? onEdit : undefined}
                         onImage={onImage}
                     />
                 );
@@ -1724,7 +1724,8 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
     };
 
     const restoreUnsent = (text: string, imgs: string[]): void => {
-        if (composer.current?.restore(text, imgs)) return;
+        // the box takes the images back whatever it holds; the queue only ever takes words
+        if (composer.current?.restore(text, imgs) || !text) return;
         writeQueue([text, ...queued.current]);
         setNotice((m) => `${m} The unsent message is back in the queue.`.trim());
     };

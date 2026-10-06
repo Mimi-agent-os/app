@@ -59,6 +59,7 @@
 .msg[data-speaker=human] .msg-body{padding:10px 14px;border-radius:var(--r2);background:var(--panel-2)}
 .msg[data-speaker=system] .msg-body,.msg[data-speaker=unknown] .msg-body{color:var(--ink-2)}
 .msg-foot{display:flex;align-items:center;gap:var(--s1);margin-top:-2px;font:var(--f-xs);color:var(--ink-3)}
+.msg-foot:empty{display:none}
 .msg-actions .btn,.msg-foot .btn{height:22px;padding:0 6px;font:var(--f-xs);font-weight:500}
 @media (pointer:fine){
   .msg-actions,.msg-foot{opacity:0}
@@ -78,8 +79,9 @@
 .msg-edit-bar{display:flex;align-items:center;gap:var(--s1)}
 .msg-edit-bar>span{margin-right:auto;font:var(--f-xs);color:var(--ink-3)}
 
-/* images sent with a message; a fixed frame, so the thread never jumps while one decodes */
-.chat-images{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:10px;white-space:normal}
+/* images sent with a message, above its text; a fixed frame, so the thread never jumps while one decodes */
+.chat-images{display:flex;flex-wrap:wrap;gap:var(--s2);white-space:normal}
+.chat-images:not(:last-child){margin-bottom:10px}
 .chat-image{display:grid;place-items:center;width:132px;height:96px;max-width:100%;padding:0;overflow:hidden;border:1px solid var(--line);border-radius:var(--r1);background:var(--panel-2);color:var(--ink-3)}
 .msg[data-speaker=human] .chat-image{background:var(--panel)}
 .chat-image img{display:block;width:100%;height:100%;object-fit:contain;opacity:0}
