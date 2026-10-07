@@ -47,9 +47,11 @@ import { CopyTextButton, Markdown } from "../components/markdown.tsx";
 import { Menu } from "../components/menu.tsx";
 import { ConnLine } from "../components/nav-bar.tsx";
 import type { Command } from "../components/palette.tsx";
+import { BoxCards, PasteCard, PasteViewer } from "../components/paste-card.tsx";
 import { QuestionCard, type AskOutcome } from "../components/question-card.tsx";
 import { useToast } from "../components/toast.tsx";
 import { AgentMark, BackButton, Btn, Disclose, Empty, LoadBoundary } from "../components/ui.tsx";
+import { build, isLongPaste, newPaste, parse, tooLarge, type Paste } from "../pasted.ts";
 import { go, here, holdBack, releaseBack } from "../route.ts";
 import { clock, countdown, errorMessage, Err, isDelegation, kilo, plural, SOFT_KEYS, useDevDetails, when } from "../shared.ts";
 import { usd } from "../spend.ts";
@@ -437,7 +439,9 @@ function ImageViewer({ images, start, from, onClose }: {
 
 type Speaker = "human" | "agent" | "system" | "unknown";
 
-const Bubble = memo(function Bubble({ speaker, who, text, md, images, at, head = true, sent, editId, onEdit, onImage }: {
+type OnOpenPaste = (paste: Paste, from: HTMLButtonElement) => void;
+
+const Bubble = memo(function Bubble({ speaker, who, text, md, images, at, head = true, sent, editId, onEdit, onImage, onOpenPaste }: {
     speaker: Speaker;
     who: string;
     text: string;
@@ -453,9 +457,12 @@ const Bubble = memo(function Bubble({ speaker, who, text, md, images, at, head =
     /** Your own db-backed messages only: an edit truncates the chat from there. */
     onEdit?: ((id: number) => void) | undefined;
     onImage?: ((images: string[], start: number, from: HTMLButtonElement) => void) | undefined;
+    onOpenPaste?: OnOpenPaste | undefined;
 }): ReactElement {
+    // an agent's reply is its own words: only a message sent from a box can carry pasted blocks
+    const { pastes, text: typed } = useMemo(() => (md ? { pastes: [], text } : parse(text)), [md, text]);
     const time = at ? <time className="msg-time" dateTime={`${at.replace(" ", "T")}Z`}>{clock(at)}</time> : null;
-    const copy = text ? <CopyTextButton text={text} label="Copy message" /> : null;
+    const copy = text ? <CopyTextButton text={[...pastes.map((p) => p.text), typed].filter(Boolean).join("\n\n")} label="Copy message" /> : null;
     return (
         <article className={sent ? "msg is-sent" : "msg"} data-speaker={speaker}>
             {speaker !== "human" && head && (
@@ -478,7 +485,12 @@ const Bubble = memo(function Bubble({ speaker, who, text, md, images, at, head =
                         ))}
                     </div>
                 )}
-                {text && (md ? <Markdown text={text} /> : <span>{text}</span>)}
+                {pastes.length > 0 && (
+                    <div className="paste-cards">
+                        {pastes.map((p, i) => <PasteCard key={i} paste={p} preview={2} onOpen={(paste, from) => onOpenPaste?.(paste, from)} />)}
+                    </div>
+                )}
+                {typed && (md ? <Markdown text={typed} /> : <span>{typed}</span>)}
             </div>
             {speaker === "human" && (
                 <footer className="msg-foot">
@@ -493,23 +505,37 @@ const Bubble = memo(function Bubble({ speaker, who, text, md, images, at, head =
     );
 });
 
-// in place, not a modal, so what an edit would delete stays visible below it
-function EditBox({ text, busy, onSave, onCancel }: {
+// in place, not a modal, so what an edit would delete stays visible below it; pasted texts come back as cards and leave with the words
+function EditBox({ text, busy, onSave, onCancel, onOpenPaste }: {
     text: string;
     /** A turn is running: saving would race it. */
     busy: boolean;
     onSave: (text: string) => void;
     onCancel: () => void;
+    onOpenPaste: OnOpenPaste;
 }): ReactElement {
-    const [value, setValue] = useState(text);
+    const [start] = useState(() => parse(text));
+    const [value, setValue] = useState(start.text);
+    const [pastes, setPastes] = useState(start.pastes);
+    const box = useRef<HTMLTextAreaElement | null>(null);
+    const empty = !value.trim() && pastes.length === 0;
     return (
         <div className="msg msg-edit" data-speaker="human">
+            {pastes.length > 0 && <BoxCards pastes={pastes} box={box} onOpen={onOpenPaste} setPastes={setPastes} setText={setValue} />}
             <textarea
+                ref={box}
                 autoFocus
                 aria-label="Edit message"
                 rows={3}
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
+                onPaste={(e) => {
+                    // as in the message box: a long text rides as a card
+                    const pasted = e.clipboardData.getData("text/plain");
+                    if (!isLongPaste(pasted)) return;
+                    e.preventDefault();
+                    setPastes((cur) => [...cur, newPaste(cur, pasted)]);
+                }}
                 onKeyDown={(e) => {
                     if (e.nativeEvent.isComposing) return;
                     if (e.key === "Escape") {
@@ -518,14 +544,14 @@ function EditBox({ text, busy, onSave, onCancel }: {
                     } else if (e.key === "Enter" && !e.shiftKey && !matchMedia(SOFT_KEYS).matches) {
                         e.preventDefault();
                         e.stopPropagation();
-                        if (value.trim() && !busy) onSave(value.trim());
+                        if (!empty && !busy) onSave(build(pastes, value.trim()));
                     }
                 }}
             />
             <div className="msg-edit-bar">
                 <span>Saving deletes everything below</span>
                 <Btn kind="quiet" sm onClick={onCancel}>Cancel</Btn>
-                <Btn kind="primary" sm disabled={!value.trim() || busy} title={busy ? "Wait for the running turn to end" : undefined} onClick={() => onSave(value.trim())}>
+                <Btn kind="primary" sm disabled={empty || busy} title={busy ? "Wait for the running turn to end" : undefined} onClick={() => onSave(build(pastes, value.trim()))}>
                     Save and send
                 </Btn>
             </div>
@@ -781,7 +807,7 @@ const TurnBlock = memo(function TurnBlock({ agent, turn, now, onToggle, onAnswer
 });
 
 /** The history window, memoized apart from the live turn so a stream chunk never re-renders it. */
-const PastThread = memo(function PastThread({ agent, items, editing, canEdit, onEdit, onEditSave, onEditCancel, onImage }: {
+const PastThread = memo(function PastThread({ agent, items, editing, canEdit, onEdit, onEditSave, onEditCancel, onImage, onOpenPaste }: {
     agent: string;
     items: readonly Item[];
     editing: number | null;
@@ -790,6 +816,7 @@ const PastThread = memo(function PastThread({ agent, items, editing, canEdit, on
     onEditSave: (id: number, text: string) => void;
     onEditCancel: () => void;
     onImage: (images: string[], start: number, from: HTMLButtonElement) => void;
+    onOpenPaste: OnOpenPaste;
 }): ReactElement {
     const dev = useDevDetails();
     return (
@@ -806,7 +833,7 @@ const PastThread = memo(function PastThread({ agent, items, editing, canEdit, on
                     ) : null;
                 }
                 if (editing === it.id) {
-                    return <EditBox key={`h${it.id}`} text={it.text} busy={!canEdit} onSave={(text) => onEditSave(it.id, text)} onCancel={onEditCancel} />;
+                    return <EditBox key={`h${it.id}`} text={it.text} busy={!canEdit} onSave={(text) => onEditSave(it.id, text)} onCancel={onEditCancel} onOpenPaste={onOpenPaste} />;
                 }
                 const speaker: Speaker = it.actor?.kind ?? "unknown";
                 const who = speaker === "human" ? "You" : speaker === "agent" ? (it.actor?.agent ?? "Agent") : speaker === "system" ? "System" : "Sender not recorded";
@@ -823,6 +850,7 @@ const PastThread = memo(function PastThread({ agent, items, editing, canEdit, on
                         // only while nothing runs (truncating under a live turn would delete rows it is still writing), and only words can be edited
                         onEdit={canEdit && speaker === "human" && it.text ? onEdit : undefined}
                         onImage={onImage}
+                        onOpenPaste={onOpenPaste}
                     />
                 );
             })}
@@ -1157,6 +1185,7 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
     const [pick, setPick] = useState<HTMLElement | null>(null);
     // held here, not in the bubble: a finished turn swaps the live message for its history row, and the viewer must outlive that
     const [viewing, setViewing] = useState<{ images: string[]; start: number; from: HTMLButtonElement } | null>(null);
+    const [reading, setReading] = useState<{ paste: Paste; from: HTMLButtonElement } | null>(null);
     const dialog = useDialog();
     const toast = useToast();
     const actions = useChatActions(agent);
@@ -1778,6 +1807,11 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
     // an edit truncates the chat from that row for good, unlike compaction, so the confirm is a danger one
     const editMessage = async (messageId: number, text: string): Promise<void> => {
         if (running.current || rows === null) return;
+        const over = tooLarge(text, []);
+        if (over) {
+            setNotice(over);
+            return;
+        }
         const ok = await dialog.confirm({
             title: "Send the edited message?",
             body: "Every message after this one is deleted for good: the agent's answer and everything that followed, in the chat and in the model's history. The chat then continues from the edited text.",
@@ -1829,6 +1863,7 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
     const onRename = useCallback((value: string | null): void => handlers.current.rename(value), []);
     const onRenameStart = useCallback((): void => setRenaming(true), []);
     const onImage = useCallback((images: string[], start: number, from: HTMLButtonElement): void => setViewing({ images, start, from }), []);
+    const onOpenPaste = useCallback<OnOpenPaste>((paste, from) => setReading({ paste, from }), []);
 
     let pending: { turn: number; gate: Gate } | null = null;
     // a question takes no gate shortcut: ⌘⏎ and Escape answer approvals only
@@ -1932,7 +1967,6 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
             <div className="thread" ref={thread} onScroll={onScroll} inert={onWeb}>
                 {/* zero height with margin-top:auto: a short history settles at the bottom without breaking scroll */}
                 {!emptyChat && <div className="threadfill" />}
-                {notice && <Err><span>{notice}</span><Btn kind="quiet" sm onClick={() => setNotice("")}>Hide</Btn></Err>}
                 {syncError && (
                     <Err>
                         <span>{syncError}</span>
@@ -1970,13 +2004,14 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
                             onEditSave={onEditSave}
                             onEditCancel={onEditCancel}
                             onImage={onImage}
+                            onOpenPaste={onOpenPaste}
                         />
                     </div>
                 )}
                 {live.map((it) =>
                     it.kind === "msg" ? (
                         // no edit here: a live message has no db id to truncate from until the chat is next read
-                        <Bubble key={`l${it.id}`} speaker="human" who="You" text={it.text} images={it.images} sent onImage={onImage} />
+                        <Bubble key={`l${it.id}`} speaker="human" who="You" text={it.text} images={it.images} sent onImage={onImage} onOpenPaste={onOpenPaste} />
                     ) : (
                         <TurnBlock key={`l${it.id}`} agent={agent} turn={it} now={it.id === pending?.turn ? now : 0} onToggle={toggle} onAnswer={answer} onSettle={settle} />
                     ),
@@ -1989,25 +2024,40 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
                 )}
             </div>
             <div className="chat-dock" inert={onWeb}>
+                {/* above the box, not atop the thread: a long chat would keep it scrolled out of sight while the box waits on it */}
+                {notice && <Err><span>{notice}</span><Btn kind="quiet" sm onClick={() => setNotice("")}>Hide</Btn></Err>}
                 {queue.length > 0 && (
                     <div className="queue">
                         <p className="queue-note">
                             {queue.length} queued. {busy ? "They send in order when this turn ends well." : "They go out in order after your next message."}
                         </p>
-                        {queue.map((text, i) => (
-                            // index keys: the entries have no identity of their own, and their order is what is being edited
-                            <div key={i} className="queue-row">
-                                <span className="queue-n">{i + 1}</span>
-                                <textarea
-                                    className="queue-text"
-                                    rows={1}
-                                    aria-label={`Queued message ${i + 1}`}
-                                    value={text}
-                                    onChange={(e) => writeQueue(queued.current.map((q, j) => (j === i ? e.target.value : q)))}
-                                />
-                                <Btn kind="quiet" sm icon="close" title="Remove from the queue" onClick={() => writeQueue(queued.current.filter((_, j) => j !== i))} />
-                            </div>
-                        ))}
+                        {queue.map((text, i) => {
+                            // a queued message is the text it will send: its pasted blocks show as names, and only the words are edited here
+                            const { pastes, text: typed } = parse(text);
+                            return (
+                                // index keys: the entries have no identity of their own, and their order is what is being edited
+                                <div key={i} className="queue-row">
+                                    <span className="queue-n">{i + 1}</span>
+                                    <div className="queue-item">
+                                        {pastes.length > 0 && (
+                                            <div className="queue-pastes">
+                                                {pastes.map((p, j) => (
+                                                    <button key={j} type="button" className="queue-paste" title={`Open ${p.title}`} onClick={(e) => onOpenPaste(p, e.currentTarget)}>{p.title}</button>
+                                                ))}
+                                            </div>
+                                        )}
+                                        <textarea
+                                            className="queue-text"
+                                            rows={1}
+                                            aria-label={`Queued message ${i + 1}`}
+                                            value={typed}
+                                            onChange={(e) => writeQueue(queued.current.map((q, j) => (j === i ? build(parse(q).pastes, e.target.value) : q)))}
+                                        />
+                                    </div>
+                                    <Btn kind="quiet" sm icon="close" title="Remove from the queue" onClick={() => writeQueue(queued.current.filter((_, j) => j !== i))} />
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
                 <Composer
@@ -2027,6 +2077,7 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
                     onSubmit={onSubmit}
                     onStop={onStop}
                     onNotice={setNotice}
+                    onOpenPaste={onOpenPaste}
                 />
                 {row?.archived && <p className="chat-status">Archived. It stays out of the list until you unarchive it.</p>}
             </div>
@@ -2100,9 +2151,19 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
                     }}
                 />
             )}
+            {reading && (
+                <PasteViewer
+                    paste={reading.paste}
+                    from={reading.from}
+                    onClose={() => {
+                        setReading(null);
+                        if (!reading.from.isConnected && matchMedia("(pointer: fine)").matches) composer.current?.focus();
+                    }}
+                />
+            )}
             {dropping && (
                 <div className="drop-veil" aria-hidden="true">
-                    <span>{currentModel?.vision === true ? "Drop images to attach" : `${currentModel?.name ?? "This model"} cannot read images`}</span>
+                    <span>{currentModel?.vision === true ? "Drop images or text files to attach" : `Drop text files to attach. ${currentModel?.name ?? "This model"} cannot read images.`}</span>
                 </div>
             )}
         </section>

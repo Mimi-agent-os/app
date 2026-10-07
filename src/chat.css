@@ -44,8 +44,9 @@
 .thread-past{min-width:0}
 .thread-top{padding:2px 0 var(--s3);text-align:center;font:var(--f-xs);color:var(--ink-3)}
 .thread-top .skel{display:inline-block;vertical-align:middle}
-.thread>.err{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2);margin:0 0 var(--s3)}
-.thread>.err>span{flex:1;min-width:0}
+.thread>.err,.chat-dock>.err{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2);margin:0 0 var(--s3)}
+.chat-dock>.err{margin-bottom:var(--s2)}
+:is(.thread,.chat-dock)>.err>span{flex:1;min-width:0}
 
 /* messages: agent replies are set as text, your own are a soft block on the right */
 .msg{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;margin:0 0 var(--s5);min-width:0}
@@ -94,6 +95,32 @@
 .image-viewer-close{justify-self:end}
 .image-viewer-bar{display:flex;align-items:center;gap:var(--s2);padding:0 var(--s1);border-radius:var(--r1);background:var(--panel-2);font:var(--f-sm);color:var(--ink-2)}
 .image-viewer-bar .btn:first-child .i{rotate:180deg}
+
+/* pasted text: a card in the box, in an edit and in your message; the whole card opens it, and × and Insert sit above that */
+.paste-cards{display:flex;flex-wrap:wrap;gap:var(--s2);white-space:normal}
+.msg-body>.paste-cards:not(:last-child){margin-bottom:10px}
+.paste-card{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px var(--s2);width:264px;max-width:100%;padding:7px 10px 8px 12px;border:1px solid var(--line);border-radius:var(--r1);background:var(--panel);text-align:left}
+@media (hover:hover){.paste-card:has(>.paste-open:hover){border-color:var(--line-2)}}
+.paste-card:has(>.paste-open:focus-visible){outline:2px solid var(--focus);outline-offset:2px}
+.paste-open{min-width:0;padding:0;border:0;background:none;font:var(--f-sm);font-weight:500;color:var(--ink);text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.paste-open::after{content:"";position:absolute;inset:0;border-radius:inherit}
+.paste-open:focus-visible{outline:none}
+.paste-line{grid-column:1/-1;min-width:0;min-height:19px;overflow:hidden;text-overflow:ellipsis;white-space:pre;tab-size:4;font:var(--f-code);color:var(--ink-3)}
+.paste-meta{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--f-xs);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.paste-x,.paste-insert{position:relative;z-index:1;border:0;background:none;cursor:pointer}
+.paste-x{display:grid;place-items:center;width:20px;height:20px;margin:-2px -4px -2px 0;padding:0;border-radius:var(--r0);color:var(--ink-3)}
+.paste-insert{padding:0;font:var(--f-xs);font-weight:500;color:var(--ink-2);white-space:nowrap}
+@media (hover:hover){.paste-x:hover{background:var(--hover);color:var(--ink)} .paste-insert:hover{color:var(--ink);text-decoration:underline;text-underline-offset:2px}}
+@media (pointer:coarse){.paste-x{width:28px;height:28px;margin:-6px -8px -6px 0} .paste-insert{padding:4px 0;margin:-4px 0}}
+
+/* the pasted text in full: a sheet on the dialog's shade, as tall as its text up to the window, the whole screen on a phone; a long title gives way, never the size */
+.dlgback.paste-viewer{grid-template-rows:minmax(0,1fr);padding:max(var(--s4),var(--in-t)) max(var(--s4),var(--in-r)) max(var(--s4),var(--in-b)) max(var(--s4),var(--in-l))}
+.paste-sheet{display:flex;flex-direction:column;width:min(880px,100%);max-height:100%;min-height:0;border:1px solid var(--line-2);border-radius:var(--r2);background:var(--panel);overflow:hidden}
+.paste-sheet-head{display:flex;align-items:center;gap:var(--s2);flex:none;min-width:0;padding:8px 8px 8px 20px;border-bottom:1px solid var(--line)}
+.paste-sheet-head h2{flex:0 1 auto;min-width:0;margin:0;font:var(--f-body);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.paste-sheet-meta{flex:none;margin-right:auto;white-space:nowrap;font:var(--f-xs);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.paste-sheet pre{flex:1 1 auto;min-height:0;margin:0;padding:var(--s4) 20px var(--s5);overflow:auto;font:var(--f-code);color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere;tab-size:4}
+.paste-sheet pre:focus-visible{outline-offset:-2px}
 
 /* thinking, tools, the generation line */
 .chat-thinking{margin:0 0 var(--s3)}
@@ -200,7 +227,11 @@
 .queue-note{margin:0;font:var(--f-xs);color:var(--ink-3)}
 .queue-row{display:flex;align-items:flex-start;gap:6px}
 .queue-n{width:14px;flex:none;font:var(--f-xs);font-family:var(--mono);line-height:26px;color:var(--ink-3)}
-.queue-text{flex:1;min-width:0;min-height:26px;resize:vertical;padding:3px 8px;border:1px solid var(--line);border-radius:var(--r1);background:var(--panel-2);color:var(--ink);font:var(--f-body)}
+.queue-item{flex:1;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);gap:4px}
+.queue-pastes{display:flex;flex-wrap:wrap;gap:4px}
+.queue-paste{max-width:100%;height:22px;padding:0 8px;border:1px solid var(--line);border-radius:var(--r0);background:var(--panel-2);font:var(--f-xs);color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+@media (hover:hover){.queue-paste:hover{border-color:var(--line-2);color:var(--ink)}}
+.queue-text{display:block;width:100%;min-height:26px;resize:vertical;padding:3px 8px;border:1px solid var(--line);border-radius:var(--r1);background:var(--panel-2);color:var(--ink);font:var(--f-body)}
 .chat-status{margin:6px 0 0;text-align:center;font:var(--f-xs);color:var(--ink-3)}
 
 .composer{position:relative;display:grid;gap:var(--s2);padding:10px 10px 10px 14px;border:1px solid var(--line);border-radius:var(--r2);background:var(--panel-2)}
@@ -258,6 +289,13 @@
   /* the command list grows out of the composer's top edge: one outline, a hairline between them */
   .slash-menu{left:-1px;right:-1px;bottom:100%;border:1px solid;border-color:inherit;border-bottom-color:var(--line);border-radius:var(--r2) var(--r2) 0 0;box-shadow:none}
   .composer:has(> .slash-menu){border-start-start-radius:0;border-start-end-radius:0}
+  /* a row of cards scrolls sideways, so the box never grows a card taller per paste */
+  .composer>.paste-cards{flex-wrap:nowrap;overflow-x:auto;margin:-4px;padding:4px}
+  .composer>.paste-cards>.paste-card{flex:none;width:232px}
+  .dlgback.paste-viewer{padding:0}
+  .paste-sheet{width:100%;height:100%;max-height:none;border:0;border-radius:0;padding:var(--in-t) var(--in-r) var(--in-b) var(--in-l)}
+  .paste-sheet-head{padding-left:var(--s4)}
+  .paste-sheet pre{padding:var(--s3) var(--s4) var(--s5)}
 }
 /* the phone scale sets message text at 15px; a text field stays at 16px, or iOS zooms on focus */
 @media (pointer:coarse){.composer textarea,.msg-edit textarea,.queue-text{font-size:17px}}

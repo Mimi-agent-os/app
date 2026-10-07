@@ -1,10 +1,12 @@
-// The chat's message box: it owns the draft, staged images and the slash menu, so a keystroke re-renders only this.
+// The chat's message box: it owns the draft, staged images, pasted-text cards and the slash menu, so a keystroke re-renders only this.
 import { memo, useEffect, useId, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import type { ReactElement, Ref } from "react";
 
 import { Icon } from "../components/icon.tsx";
 import { matchSlash, type Command } from "../components/palette.tsx";
+import { BoxCards } from "../components/paste-card.tsx";
 import { Btn } from "../components/ui.tsx";
+import { build, isLongPaste, newPaste, parse, readDropped, tooLarge, type Paste } from "../pasted.ts";
 import { errorMessage, kilo, plural, SOFT_KEYS } from "../shared.ts";
 
 // wire contract: at most 4 images and 750 000 data-URI bytes per message (a channel frame is 1 MiB)
@@ -33,7 +35,7 @@ async function downscaleImage(file: File): Promise<string | null> {
     }
 }
 
-// session storage survives a reload while keeping drafts apart between browser tabs
+// session storage survives a reload while keeping drafts apart between browser tabs; a draft is kept as the message it would send
 const DRAFTS = new Map<string, string>();
 const DRAFT_KEY = "mimi-os:chat-draft";
 
@@ -48,12 +50,12 @@ export function carryDraft(agent: string, text: string, images: string[]): void 
 export type SubmitResult = "sent" | "queued" | "drained" | "refused";
 
 export interface ComposerHandle {
-    /** Puts an unsent message back; false when the box already holds other text (images always come back). */
+    /** Puts an unsent message back, its pasted texts as cards; false when the box already holds other words (images always come back). */
     restore(text: string, images: string[]): boolean;
-    /** Empties the box, staged images included, and returns what it held. */
+    /** Empties the box, staged images and cards included, and returns what it held. */
     take(): { text: string; images: string[] };
     focus(): void;
-    /** Stages files dropped on the chat the way the picker does; a model that cannot read images says so. */
+    /** Files dropped on the chat: images staged the way the picker does, text files as cards, anything else named in a notice. */
     attach(files: File[]): void;
 }
 
@@ -76,24 +78,28 @@ interface ComposerProps {
     onSubmit: (text: string, images: string[]) => SubmitResult;
     onStop: () => void;
     onNotice: (text: string) => void;
+    onOpenPaste: (paste: Paste, from: HTMLButtonElement) => void;
     ref?: Ref<ComposerHandle> | undefined;
 }
 
 function ComposerView({
     agent, draftKey, busy, stopPending, ready, waiting, queued, canAttach, noImages, meter, slash: commands, blocked,
-    onSubmit, onStop, onNotice, ref,
+    onSubmit, onStop, onNotice, onOpenPaste, ref,
 }: ComposerProps): ReactElement {
     // read here, cleared by the effect below: StrictMode runs this twice and both runs must see it
-    const [draft, setDraft] = useState(() => {
+    const [start] = useState(() => {
         let held = DRAFTS.get(draftKey) ?? "";
         try {
             held ||= sessionStorage.getItem(`${DRAFT_KEY}:${draftKey}`) ?? "";
         } catch {
             // storage disabled: the draft simply starts empty
         }
-        const moved = carried?.agent === agent ? carried.text.trim() : "";
-        return held && moved ? `${held}\n\n${moved}` : held || moved;
+        const kept = parse(held);
+        const moved = parse(carried?.agent === agent ? carried.text.trim() : "");
+        return { text: kept.text && moved.text ? `${kept.text}\n\n${moved.text}` : kept.text || moved.text, pastes: [...kept.pastes, ...moved.pastes] };
     });
+    const [draft, setDraft] = useState(start.text);
+    const [pastes, setPastes] = useState<Paste[]>(start.pastes);
     // not persisted: a stale multi-megabyte data-URI is not worth a store
     const [images, setImages] = useState<string[]>(() => (carried?.agent === agent ? carried.images : []));
     const [slashDismissed, setSlashDismissed] = useState(false);
@@ -104,43 +110,58 @@ function ComposerView({
     const slash = slashDismissed ? [] : matchSlash(commands, draft);
     const slashAt = Math.min(slashActive, slash.length - 1);
 
-    const write = (next: string): void => {
-        setDraft(next);
-        DRAFTS.set(draftKey, next);
-        try {
-            if (next) sessionStorage.setItem(`${DRAFT_KEY}:${draftKey}`, next);
-            else sessionStorage.removeItem(`${DRAFT_KEY}:${draftKey}`);
-        } catch {
-            // the in-memory draft still carries this session
-        }
-    };
-
-    // once, on arrival: the draft read above already holds what was carried, and is saved like typed text
+    // stored as the message it would send, so the cards come back with the words; what was carried here is saved the same way
     useEffect(() => {
-        if (carried?.agent !== agent) return;
-        carried = null;
-        write(draft);
+        const saved = build(pastes, draft);
+        DRAFTS.set(draftKey, saved);
+        try {
+            // cleared first: a draft too big for the store must not leave an older one to come back on a reload
+            sessionStorage.removeItem(`${DRAFT_KEY}:${draftKey}`);
+            if (saved) sessionStorage.setItem(`${DRAFT_KEY}:${draftKey}`, saved);
+        } catch {
+            // full or disabled: the in-memory draft still carries this session
+        }
+    }, [draftKey, draft, pastes]);
+
+    // once, on arrival: the state read above already holds what was carried
+    useEffect(() => {
+        if (carried?.agent === agent) carried = null;
     }, []);
 
     useImperativeHandle(ref, () => ({
         restore: (text, returned) => {
             // images staged meanwhile stay, after the ones coming back
             if (returned.length > 0) setImages((cur) => [...returned, ...cur].slice(0, MAX_IMAGES));
-            if (box.current?.value.trim()) return false;
-            write(text);
+            if (box.current?.value.trim() || pastes.length > 0) return false;
+            const back = parse(text);
+            setDraft(back.text);
+            setPastes(back.pastes);
             return true;
         },
         take: () => {
-            const held = { text: box.current?.value ?? draft, images };
-            write("");
+            const held = { text: build(pastes, box.current?.value ?? draft), images };
+            setDraft("");
+            setPastes([]);
             setImages([]);
             return held;
         },
         focus: () => box.current?.focus(),
         attach: (files) => {
-            if (!files.some((f) => f.type.startsWith("image/"))) onNotice("Only images can be attached.");
-            else if (canAttach) void addFiles(files);
-            else if (noImages) onNotice(`${noImages} cannot read images.`);
+            void (async () => {
+                const pics: File[] = [];
+                const added: Paste[] = [];
+                const notes: string[] = [];
+                for (const file of files) {
+                    const got = await readDropped(file).catch(() => ({ kind: "refused", reason: `${file.name} could not be read.` }) as const);
+                    if (got.kind === "image") pics.push(file);
+                    else if (got.kind === "text") added.push(got.paste);
+                    else notes.push(got.reason);
+                }
+                if (added.length > 0) setPastes((cur) => [...cur, ...added]);
+                if (pics.length > 0 && !canAttach && noImages) notes.push(`${noImages} cannot read images.`);
+                if (pics.length > 0 && canAttach) await addFiles(pics, notes);
+                else if (notes.length > 0) onNotice(notes.join(" "));
+            })();
         },
     }));
 
@@ -153,7 +174,7 @@ function ComposerView({
     }, [draft]);
 
     const runCommand = (c: Command): void => {
-        write("");
+        setDraft("");
         void Promise.resolve().then(() => c.run()).catch((e: unknown) => onNotice(errorMessage(e)));
     };
 
@@ -163,21 +184,30 @@ function ComposerView({
             runCommand(command);
             return;
         }
-        const result = onSubmit(draft.trim(), images);
+        const text = build(pastes, draft.trim());
+        // everything stays in the box: the gateway would refuse the whole request
+        const over = tooLarge(text, busy ? [] : images);
+        if (over) {
+            onNotice(over);
+            return;
+        }
+        const result = onSubmit(text, images);
         if (result === "sent") setImages([]);
-        if (result === "sent" || result === "queued") write("");
+        if (result === "sent" || result === "queued") {
+            setDraft("");
+            setPastes([]);
+        }
         if (result === "queued" && images.length > 0) onNotice("A queued message carries text only. The images stay in the box for your next message.");
-        if (result === "refused" && busy && !draft.trim() && images.length > 0) onNotice("A queued message carries text only. The images stay in the box until this turn ends.");
+        if (result === "refused" && busy && !text && images.length > 0) onNotice("A queued message carries text only. The images stay in the box until this turn ends.");
     };
 
-    /** Stages what fits; whatever is dropped is said out loud rather than silently discarded. */
-    const addFiles = async (files: File[]): Promise<void> => {
-        if (!canAttach) return;
-        const pics = files.filter((f) => f.type.startsWith("image/"));
-        if (pics.length === 0) return;
+    /** Stages what fits; whatever is dropped is said out loud, after the notes the caller brings, rather than silently discarded. */
+    const addFiles = async (files: File[], notes: string[] = []): Promise<void> => {
+        const pics = canAttach ? files.filter((f) => f.type.startsWith("image/")) : [];
         const room = MAX_IMAGES - images.length;
-        if (room <= 0) {
-            onNotice(`A message carries at most ${MAX_IMAGES} images.`);
+        if (pics.length > 0 && room <= 0) notes.push(`A message carries at most ${MAX_IMAGES} images.`);
+        if (pics.length === 0 || room <= 0) {
+            if (notes.length) onNotice(notes.join(" "));
             return;
         }
         let tooBig = 0;
@@ -193,7 +223,6 @@ function ComposerView({
             }
         }
         if (added.length) setImages((cur) => [...cur, ...added].slice(0, MAX_IMAGES));
-        const notes: string[] = [];
         if (pics.length > room) notes.push(`Only ${room} more ${plural(room, "image fits", "images fit")}, a message holds ${MAX_IMAGES}.`);
         if (tooBig) notes.push(`${tooBig} too detailed to shrink under ${Math.round(IMAGE_BUDGET / 1000)} KB ${plural(tooBig, "was", "were")} skipped.`);
         if (unreadable) notes.push(`${unreadable} could not be read.`);
@@ -201,7 +230,7 @@ function ComposerView({
     };
 
     const pct = meter ? Math.min(100, Math.round((meter.used / meter.window) * 100)) : 0;
-    const empty = !draft.trim() && images.length === 0;
+    const empty = !draft.trim() && images.length === 0 && pastes.length === 0;
 
     return (
         <div className="composer" data-blocked={blocked === null ? undefined : ""}>
@@ -240,6 +269,7 @@ function ComposerView({
                     ))}
                 </div>
             )}
+            {pastes.length > 0 && <BoxCards pastes={pastes} box={box} onOpen={onOpenPaste} setPastes={setPastes} setText={setDraft} />}
             <input
                 ref={fileInput}
                 type="file"
@@ -262,16 +292,22 @@ function ComposerView({
                 disabled={blocked !== null}
                 value={draft}
                 onChange={(e) => {
-                    write(e.target.value);
+                    setDraft(e.target.value);
                     setSlashActive(0);
                     setSlashDismissed(false);
                 }}
                 onPaste={(e) => {
-                    if (!canAttach) return;
-                    const pics = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/"));
-                    if (pics.length === 0) return;
+                    const pics = canAttach ? Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/")) : [];
+                    if (pics.length > 0) {
+                        e.preventDefault();
+                        void addFiles(pics);
+                        return;
+                    }
+                    // a long text rides as a card, word for word, and the box keeps only what is typed
+                    const text = e.clipboardData.getData("text/plain");
+                    if (!isLongPaste(text)) return;
                     e.preventDefault();
-                    void addFiles(pics);
+                    setPastes((cur) => [...cur, newPaste(cur, text)]);
                 }}
                 onKeyDown={(e) => {
                     // an Enter that confirms an IME candidate must never send the half-written message
@@ -291,7 +327,7 @@ function ComposerView({
                     if (e.key === "Tab" && slash.length > 0) {
                         e.preventDefault();
                         const selected = slash[slashAt];
-                        if (selected?.slash) write(`${selected.slash} `);
+                        if (selected?.slash) setDraft(`${selected.slash} `);
                         setSlashActive(0);
                         return;
                     }
@@ -332,7 +368,7 @@ function ComposerView({
                 )}
                 {busy ? (
                     <>
-                        <Btn icon="queue" disabled={!draft.trim()} title={slash.length > 0 ? "Run the selected command" : "Line this message up behind the running turn"} onClick={submit}>
+                        <Btn icon="queue" disabled={!draft.trim() && pastes.length === 0} title={slash.length > 0 ? "Run the selected command" : "Line this message up behind the running turn"} onClick={submit}>
                             {slash.length > 0 ? "Run" : "Queue"}
                         </Btn>
                         <Btn kind="danger" icon="stop" disabled={stopPending} onClick={onStop}>
