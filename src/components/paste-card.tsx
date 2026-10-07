@@ -3,7 +3,9 @@ import { useEffect, useMemo, useRef } from "react";
 import type { Dispatch, ReactElement, RefObject, SetStateAction } from "react";
 import { createPortal } from "react-dom";
 
-import { textSize, type Paste } from "../pasted.ts";
+import type { Paste } from "@mimi-os/protocol";
+
+import { textSize } from "../pasted.ts";
 import { holdBack, releaseBack } from "../route.ts";
 import { plural } from "../shared.ts";
 import { Icon } from "./icon.tsx";

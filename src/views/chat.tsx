@@ -15,7 +15,7 @@ import {
 import type { DragEvent, ReactElement, SyntheticEvent } from "react";
 import { createPortal, flushSync } from "react-dom";
 
-import type { OwnerAnswer, OwnerQuestion } from "@mimi-os/protocol";
+import { buildPasted, parsePasted, type OwnerAnswer, type OwnerQuestion, type Paste } from "@mimi-os/protocol";
 
 import {
     getLlmCallRaw,
@@ -51,7 +51,7 @@ import { BoxCards, PasteCard, PasteViewer } from "../components/paste-card.tsx";
 import { QuestionCard, type AskOutcome } from "../components/question-card.tsx";
 import { useToast } from "../components/toast.tsx";
 import { AgentMark, BackButton, Btn, Disclose, Empty, LoadBoundary } from "../components/ui.tsx";
-import { build, isLongPaste, newPaste, parse, tooLarge, type Paste } from "../pasted.ts";
+import { isLongPaste, newPaste, tooLarge } from "../pasted.ts";
 import { go, here, holdBack, releaseBack } from "../route.ts";
 import { clock, countdown, errorMessage, Err, isDelegation, kilo, plural, SOFT_KEYS, useDevDetails, when } from "../shared.ts";
 import { usd } from "../spend.ts";
@@ -460,7 +460,7 @@ const Bubble = memo(function Bubble({ speaker, who, text, md, images, at, head =
     onOpenPaste?: OnOpenPaste | undefined;
 }): ReactElement {
     // an agent's reply is its own words: only a message sent from a box can carry pasted blocks
-    const { pastes, text: typed } = useMemo(() => (md ? { pastes: [], text } : parse(text)), [md, text]);
+    const { pastes, text: typed } = useMemo(() => (md ? { pastes: [], text } : parsePasted(text)), [md, text]);
     const time = at ? <time className="msg-time" dateTime={`${at.replace(" ", "T")}Z`}>{clock(at)}</time> : null;
     const copy = text ? <CopyTextButton text={[...pastes.map((p) => p.text), typed].filter(Boolean).join("\n\n")} label="Copy message" /> : null;
     return (
@@ -514,7 +514,7 @@ function EditBox({ text, busy, onSave, onCancel, onOpenPaste }: {
     onCancel: () => void;
     onOpenPaste: OnOpenPaste;
 }): ReactElement {
-    const [start] = useState(() => parse(text));
+    const [start] = useState(() => parsePasted(text));
     const [value, setValue] = useState(start.text);
     const [pastes, setPastes] = useState(start.pastes);
     const box = useRef<HTMLTextAreaElement | null>(null);
@@ -544,14 +544,14 @@ function EditBox({ text, busy, onSave, onCancel, onOpenPaste }: {
                     } else if (e.key === "Enter" && !e.shiftKey && !matchMedia(SOFT_KEYS).matches) {
                         e.preventDefault();
                         e.stopPropagation();
-                        if (!empty && !busy) onSave(build(pastes, value.trim()));
+                        if (!empty && !busy) onSave(buildPasted(pastes, value.trim()));
                     }
                 }}
             />
             <div className="msg-edit-bar">
                 <span>Saving deletes everything below</span>
                 <Btn kind="quiet" sm onClick={onCancel}>Cancel</Btn>
-                <Btn kind="primary" sm disabled={empty || busy} title={busy ? "Wait for the running turn to end" : undefined} onClick={() => onSave(build(pastes, value.trim()))}>
+                <Btn kind="primary" sm disabled={empty || busy} title={busy ? "Wait for the running turn to end" : undefined} onClick={() => onSave(buildPasted(pastes, value.trim()))}>
                     Save and send
                 </Btn>
             </div>
@@ -2033,7 +2033,7 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
                         </p>
                         {queue.map((text, i) => {
                             // a queued message is the text it will send: its pasted blocks show as names, and only the words are edited here
-                            const { pastes, text: typed } = parse(text);
+                            const { pastes, text: typed } = parsePasted(text);
                             return (
                                 // index keys: the entries have no identity of their own, and their order is what is being edited
                                 <div key={i} className="queue-row">
@@ -2051,7 +2051,7 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
                                             rows={1}
                                             aria-label={`Queued message ${i + 1}`}
                                             value={typed}
-                                            onChange={(e) => writeQueue(queued.current.map((q, j) => (j === i ? build(parse(q).pastes, e.target.value) : q)))}
+                                            onChange={(e) => writeQueue(queued.current.map((q, j) => (j === i ? buildPasted(parsePasted(q).pastes, e.target.value) : q)))}
                                         />
                                     </div>
                                     <Btn kind="quiet" sm icon="close" title="Remove from the queue" onClick={() => writeQueue(queued.current.filter((_, j) => j !== i))} />

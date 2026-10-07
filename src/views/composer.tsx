@@ -2,11 +2,13 @@
 import { memo, useEffect, useId, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import type { ReactElement, Ref } from "react";
 
+import { buildPasted, parsePasted, type Paste } from "@mimi-os/protocol";
+
 import { Icon } from "../components/icon.tsx";
 import { matchSlash, type Command } from "../components/palette.tsx";
 import { BoxCards } from "../components/paste-card.tsx";
 import { Btn } from "../components/ui.tsx";
-import { build, isLongPaste, newPaste, parse, readDropped, tooLarge, type Paste } from "../pasted.ts";
+import { isLongPaste, newPaste, readDropped, tooLarge } from "../pasted.ts";
 import { errorMessage, kilo, plural, SOFT_KEYS } from "../shared.ts";
 
 // wire contract: at most 4 images and 750 000 data-URI bytes per message (a channel frame is 1 MiB)
@@ -94,8 +96,8 @@ function ComposerView({
         } catch {
             // storage disabled: the draft simply starts empty
         }
-        const kept = parse(held);
-        const moved = parse(carried?.agent === agent ? carried.text.trim() : "");
+        const kept = parsePasted(held);
+        const moved = parsePasted(carried?.agent === agent ? carried.text.trim() : "");
         return { text: kept.text && moved.text ? `${kept.text}\n\n${moved.text}` : kept.text || moved.text, pastes: [...kept.pastes, ...moved.pastes] };
     });
     const [draft, setDraft] = useState(start.text);
@@ -112,7 +114,7 @@ function ComposerView({
 
     // stored as the message it would send, so the cards come back with the words; what was carried here is saved the same way
     useEffect(() => {
-        const saved = build(pastes, draft);
+        const saved = buildPasted(pastes, draft);
         DRAFTS.set(draftKey, saved);
         try {
             // cleared first: a draft too big for the store must not leave an older one to come back on a reload
@@ -133,13 +135,13 @@ function ComposerView({
             // images staged meanwhile stay, after the ones coming back
             if (returned.length > 0) setImages((cur) => [...returned, ...cur].slice(0, MAX_IMAGES));
             if (box.current?.value.trim() || pastes.length > 0) return false;
-            const back = parse(text);
+            const back = parsePasted(text);
             setDraft(back.text);
             setPastes(back.pastes);
             return true;
         },
         take: () => {
-            const held = { text: build(pastes, box.current?.value ?? draft), images };
+            const held = { text: buildPasted(pastes, box.current?.value ?? draft), images };
             setDraft("");
             setPastes([]);
             setImages([]);
@@ -184,7 +186,7 @@ function ComposerView({
             runCommand(command);
             return;
         }
-        const text = build(pastes, draft.trim());
+        const text = buildPasted(pastes, draft.trim());
         // everything stays in the box: the gateway would refuse the whole request
         const over = tooLarge(text, busy ? [] : images);
         if (over) {
