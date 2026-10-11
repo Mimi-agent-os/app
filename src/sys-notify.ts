@@ -17,7 +17,8 @@ const looking = (): boolean => !document.hidden && (androidApp || document.hasFo
 function show(title: string, body: string, onOpen: () => void, tag = ""): void {
     const invoke = tauriInvoke();
     if (invoke) {
-        void invoke("notify", { title, body }).catch(() => undefined);
+        // on macOS the banner's click comes back ("clicked", the window already brought forward), however late
+        void invoke("notify", { title, body }).then((r) => { if (r === "clicked") onOpen(); }, () => undefined);
         return;
     }
     if (typeof Notification === "undefined" || Notification.permission !== "granted") return;

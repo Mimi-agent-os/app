@@ -745,10 +745,12 @@ function InstancePanel(): ReactElement {
                                             onClick={() => {
                                                 setTestNote("Switch to another app: a test banner comes in 5 seconds.");
                                                 setTimeout(() => {
-                                                    tauriInvoke()?.("notify", { title: "mimi", body: "System notifications work." }).then(
-                                                        () => setTestNote("Sent. No banner? Allow mimi in System Settings > Notifications, style Banners, and turn Focus off."),
-                                                        (e: unknown) => setTestNote(`Could not send: ${errorMessage(e)}`),
-                                                    );
+                                                    // on macOS the call stays open until the banner is clicked or gone: no failure soon means sent
+                                                    const sent = setTimeout(() => setTestNote("Sent. No banner? Allow mimi in System Settings > Notifications, style Banners, and turn Focus off."), 1500);
+                                                    tauriInvoke()?.("notify", { title: "mimi", body: "System notifications work." }).catch((e: unknown) => {
+                                                        clearTimeout(sent);
+                                                        setTestNote(`Could not send: ${errorMessage(e)}`);
+                                                    });
                                                 }, 5000);
                                             }}
                                         >
