@@ -35,6 +35,12 @@ pub fn run() {
         .manage(apps::Apps::default())
         .register_asynchronous_uri_scheme_protocol(apps::SCHEME, apps::serve)
         .invoke_handler(tauri::generate_handler![notify::notify, push::push_token, quit_app, open_link, apps::apps_attach, apps::app_body, apps::app_respond])
+        .setup(|_app| {
+            // the one delegate every macOS banner click comes back through, for the app's lifetime
+            #[cfg(target_os = "macos")]
+            notify::mac::init(_app.handle());
+            Ok(())
+        })
         .on_window_event(|window, event| {
             // on macOS the window closes to the Dock, its WebView and channel still up so banners keep coming; Cmd+Q and quit_app quit
             #[cfg(target_os = "macos")]

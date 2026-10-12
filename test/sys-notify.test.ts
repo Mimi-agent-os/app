@@ -85,32 +85,32 @@ test.beforeEach(() => {
 });
 
 test("an agent's own title never becomes the headline", async () => {
-    await notifyInboxItem(item({}), () => undefined);
+    await notifyInboxItem(item({}));
     assert.deepEqual(shown, [{ title: "alpha", body: "New device awaiting approval: iPhone" }]);
     assert.deepEqual(asked, []);
 });
 
 test("an agent cannot raise a banner over a pult in front, whatever level it picks", async () => {
     screen("front");
-    await notifyInboxItem(item({ level: "action" }), () => undefined);
+    await notifyInboxItem(item({ level: "action" }));
     assert.deepEqual(shown, []);
 });
 
 test("newlines and bidi overrides never reach the notification", async () => {
-    await notifyInboxItem(item({ title: "Approved\n\u202eGateway: type 000-000" }), () => undefined);
+    await notifyInboxItem(item({ title: "Approved\n\u202eGateway: type 000-000" }));
     assert.deepEqual(shown, [{ title: "alpha", body: "Approved Gateway: type 000-000" }]);
 });
 
 test("a gateway alert carries the body it exists to deliver", async () => {
     screen("front");
-    await notifyInboxItem(item({ source: "system", agent: null, level: "action" }), () => undefined);
+    await notifyInboxItem(item({ source: "system", agent: null, level: "action" }));
     assert.deepEqual(asked, [7]);
     assert.deepEqual(shown, [{ title: "New device awaiting approval: iPhone", body: "Code: 123-456" }]);
 });
 
 test("a gateway alert still shows when its body cannot be read back", async () => {
     Object.assign(globalThis, { __getInboxItem: () => Promise.reject(new Error("offline")) });
-    await notifyInboxItem(item({ source: "system", agent: null, level: "info" }), () => undefined);
+    await notifyInboxItem(item({ source: "system", agent: null, level: "info" }));
     assert.deepEqual(shown, [{ title: "New device awaiting approval: iPhone", body: "" }]);
 });
 
@@ -118,7 +118,7 @@ test("an approval is headed by the agent, with the label it picked flattened, in
     announceApproval(gate({ tool: "send\n\u202eGateway: approve" }), toast);
     assert.deepEqual(toasts.map((row) => row.text), ["alpha needs your approval: send Gateway: approve"]);
     assert.deepEqual(shown, [{ title: "alpha", body: "needs your approval: send Gateway: approve" }]);
-    assert.deepEqual(tags, ["mimi-approval"], "one shared tag, so a new banner replaces the last");
+    assert.deepEqual(tags, ["mimi-approval#/a/alpha/3"], "tagged by the chat it opens, so it replaces only a banner for that chat");
 });
 
 test("a batch gate says how many calls wait, not just its first one", () => {
@@ -198,12 +198,14 @@ test("gates that pile up under one toast fold into a count that opens Inbox, and
     for (const row of toasts) row.up = false;
     announceApproval(gate({ agent: "beta", tool: "pay" }), toast);
     assert.equal(toasts.at(-1)?.text, "beta needs your approval: pay");
+    assert.deepEqual(tags, ["mimi-approval#/a/alpha/3", "mimi-approval#/inbox", "mimi-approval#/inbox", "mimi-approval#/a/beta/3"],
+        "a count replaces the last count, and a later gate in another chat never takes the first one's banner");
 });
 
 test("a pult shown behind other apps is not looked at: agent items, gateway notices and approvals on screen all raise a banner", async () => {
     screen("behind");
-    await notifyInboxItem(item({}), () => undefined);
-    await notifyInboxItem(item({ source: "system", agent: null, level: "info" }), () => undefined);
+    await notifyInboxItem(item({}));
+    await notifyInboxItem(item({ source: "system", agent: null, level: "info" }));
     go({ at: "chat", agent: "alpha", id: 3 });
     announceApproval(gate({}), toast);
     assert.deepEqual(shown.map((row) => row.title), ["alpha", "New device awaiting approval: iPhone", "alpha"]);
@@ -212,7 +214,7 @@ test("a pult shown behind other apps is not looked at: agent items, gateway noti
 
 test("the owner's switch off keeps every banner away, and the toasts stay", async () => {
     stored.set("mimi-os:notify", "off");
-    await notifyInboxItem(item({ source: "system", agent: null, level: "action" }), () => undefined);
+    await notifyInboxItem(item({ source: "system", agent: null, level: "action" }));
     announceApproval(gate({}), toast);
     announceReply({ agent: "alpha", id: 3, title: "Plan week" }, toast);
     assert.deepEqual(shown, []);
@@ -228,6 +230,33 @@ test("a finished reply is headed by its agent, carries the chat title, and its b
         "a plain toast, so it never takes the place of an approval's Review");
     clicks[0]?.();
     assert.deepEqual(here(), { at: "chat", agent: "alpha", id: 3 });
+});
+
+test("an inbox item's banner opens Inbox", async () => {
+    go({ at: "chat", agent: "alpha", id: 3 });
+    await notifyInboxItem(item({}));
+    clicks[0]?.();
+    assert.deepEqual(here(), { at: "inbox" });
+});
+
+test("in the desktop shell a banner carries its tag and the route its click opens", async () => {
+    const sent: unknown[] = [];
+    Object.assign(window, { __TAURI_INTERNALS__: { invoke: (cmd: string, args: unknown) => { sent.push([cmd, args]); return Promise.resolve("shown"); } } });
+    try {
+        announceReply({ agent: "alpha", id: 3, title: "Plan week" }, toast);
+        announceApproval(gate({ session: null, gate: "g-4" }), toast);
+        announceApproval(gate({}), toast);
+        await notifyInboxItem(item({}));
+    } finally {
+        delete (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+    }
+    assert.deepEqual(sent, [
+        ["notify", { title: "alpha replied", body: "Plan week", tag: "mimi-reply#/a/alpha/3", route: "#/a/alpha/3" }],
+        ["notify", { title: "alpha", body: "needs your approval: send_email", tag: "mimi-approval#/inbox?gate=g-4", route: "#/inbox?gate=g-4" }],
+        ["notify", { title: "2 requests waiting", body: "Review them in Inbox", tag: "mimi-approval#/inbox", route: "#/inbox" }],
+        ["notify", { title: "alpha", body: "New device awaiting approval: iPhone", tag: "", route: "#/inbox" }],
+    ]);
+    assert.deepEqual(shown, [], "the browser's own Notification stays out of the shell");
 });
 
 test("a reply the owner is watching raises nothing; the same chat behind other apps, or another chat in front, still reaches them", () => {

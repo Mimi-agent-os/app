@@ -23,9 +23,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 getrandom = "0.3"
 
-# macOS banners through tauri-plugin-notification's own backend (src/notify.rs), which reports the owner's click
+# a bundled macOS build delivers its own banners and hears their clicks (src/notify.rs); both crates already come with tao and wry
 [target.'cfg(target_os = "macos")'.dependencies]
-notify-rust = "4"
+objc2 = { version = "0.6", default-features = false, features = ["std"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSObject", "NSString", "NSArray", "NSDictionary", "NSUserNotification"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = ["Win32_System_Com", "Win32_System_Console"] }

@@ -9,7 +9,7 @@ import { redialNow } from "./channel.ts";
 import { RootBoundary } from "./crash.ts";
 import { attachAppDoor } from "./mini-apps.ts";
 import { renewPushToken } from "./push.ts";
-import { guardHistory } from "./route.ts";
+import { go, guardHistory, parseRoute } from "./route.ts";
 import { androidApp, androidShell, tauriInvoke, type ShellInsets } from "./tauri.ts";
 import "./theme.ts";
 
@@ -56,6 +56,13 @@ document.addEventListener("visibilitychange", () => {
     if (!document.hidden) redialNow();
 });
 window.addEventListener("online", redialNow);
+
+// a click on a macOS banner (tauri/src-tauri/src/notify.rs): the window is already back, the route names what the banner was about
+window.addEventListener("mimi:notification-open", (event) => {
+    const detail: unknown = (event as CustomEvent<unknown>).detail;
+    const route = typeof detail === "string" ? parseRoute(detail) : null;
+    if (route) go(route);
+});
 
 // a file dropped anywhere but a drop zone would open in the window in place of the app
 for (const type of ["dragover", "drop"]) {

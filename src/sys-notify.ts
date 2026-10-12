@@ -14,17 +14,17 @@ const flat = (text: string): string => text.replace(/[\p{Cc}\p{Cf}\s]+/gu, " ").
 // a desktop window behind other apps is shown but not looked at; the phone app is looked at whenever it is shown
 const looking = (): boolean => !document.hidden && (androidApp || document.hasFocus());
 
-function show(title: string, body: string, onOpen: () => void, tag = ""): void {
+function show(title: string, body: string, route: Route, tag = ""): void {
     const invoke = tauriInvoke();
     if (invoke) {
-        // on macOS the banner's click comes back ("clicked", the window already brought forward), however late
-        void invoke("notify", { title, body }).then((r) => { if (r === "clicked") onOpen(); }, () => undefined);
+        // on macOS a click brings the window back and returns the route as a mimi:notification-open event (main.tsx)
+        void invoke("notify", { title, body, tag, route: formatRoute(route) }).catch(() => undefined);
         return;
     }
     if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
     try {
         const n = new Notification(title, { body, icon: "/app/favicon.png", tag });
-        n.onclick = () => { window.focus(); onOpen(); n.close(); };
+        n.onclick = () => { window.focus(); go(route); n.close(); };
     } catch {
         // constructor can throw where only ServiceWorker notifications are allowed (e.g. Android)
     }
@@ -37,16 +37,16 @@ export const itemAuthor = (event: InboxItemEvent): string | null =>
 /** An agent never authors the headline and never raises a banner over a pult the owner is looking at: both are how
  *  a gateway alert gets forged. A gateway alert's body is what it exists to deliver (the device code) and the event
  *  does not carry it, so it is read back first. */
-export async function notifyInboxItem(event: InboxItemEvent, onOpen: () => void): Promise<void> {
+export async function notifyInboxItem(event: InboxItemEvent): Promise<void> {
     if (!notifyEnabled()) return;
     const author = itemAuthor(event);
     if (author) {
-        if (!looking()) show(author, flat(event.title), onOpen);
+        if (!looking()) show(author, flat(event.title), { at: "inbox" });
         return;
     }
     if (event.level !== "action" && looking()) return;
     const item = await getInboxItem(event.id).catch(() => null);
-    show(flat(event.title), flat(item?.body ?? ""), onOpen);
+    show(flat(event.title), flat(item?.body ?? ""), { at: "inbox" });
 }
 
 // the approval toast still on screen, and how many gates it stands for
@@ -63,13 +63,15 @@ export function announceApproval(event: ApprovalEvent, toast: ShowToast): void {
     // an ask or a return gate carries a label in `tool`, so the words never claim a tool is run
     const more = event.actions > 1 ? ` and ${event.actions - 1} more` : "";
     const ask = event.kind === "question" ? "asks you a question" : `needs your approval: ${flat(event.tool)}${more}`;
-    const review = (): void => go(count === 1 ? target : { at: "inbox" });
+    const opens: Route = count === 1 ? target : { at: "inbox" };
     const headline = count === 1 ? `${event.agent} ${ask}` : `${count} requests waiting`;
-    burst = { up: toast(headline, { label: count === 1 && event.kind === "question" ? "Answer" : "Review", run: review }), count };
-    // the admitted agent's name heads a banner, never its label; one tag, so banners replace instead of stacking
+    burst = { up: toast(headline, { label: count === 1 && event.kind === "question" ? "Answer" : "Review", run: () => go(opens) }), count };
+    // the admitted agent's name heads a banner, never its label; tagged by where it opens, so a newer banner replaces only
+    // the one for the same gate, chat or count, never another chat's
     if (!notifyEnabled() || looking()) return;
-    if (count === 1) show(event.agent, ask, review, "mimi-approval");
-    else show(headline, "Review them in Inbox", review, "mimi-approval");
+    const tag = `mimi-approval${formatRoute(opens)}`;
+    if (count === 1) show(event.agent, ask, opens, tag);
+    else show(headline, "Review them in Inbox", opens, tag);
 }
 
 /** A finished reply pings as phone push does unless its chat is on screen and looked at; a plain toast never displaces an approval's Review, and the phone app leaves the banner to push. */
@@ -81,5 +83,5 @@ export function announceReply(reply: ReplyFinishedDetail, toast: ShowToast): voi
     const title = flat(reply.title ?? "") || "New chat";
     if (!onIt) toast(`${reply.agent} replied in ${title}`);
     if (!notifyEnabled() || looking() || androidApp) return;
-    show(`${reply.agent} replied`, title, () => go(target), `mimi-reply${formatRoute(target)}`);
+    show(`${reply.agent} replied`, title, target, `mimi-reply${formatRoute(target)}`);
 }

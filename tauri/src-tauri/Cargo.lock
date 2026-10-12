@@ -2086,7 +2086,8 @@ name = "mimi"
 version = "0.1.0"
 dependencies = [
  "getrandom 0.3.4",
- "notify-rust",
+ "objc2",
+ "objc2-foundation",
  "serde",
  "serde_json",
  "tauri",

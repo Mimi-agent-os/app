@@ -5,7 +5,6 @@ import type { ReplyFinishedDetail } from "../agent-chats.ts";
 import { listInbox } from "../inbox-api.ts";
 import { subscribeEvents, type ApprovalEvent, type InboxItemEvent } from "../events.ts";
 import { announceApproval, announceReply, itemAuthor, notifyInboxItem } from "../sys-notify.ts";
-import { go } from "../route.ts";
 import { useToast } from "./toast.tsx";
 
 export function useInboxUnread(): number {
@@ -29,7 +28,7 @@ export function useInboxUnread(): number {
         const stop = subscribeEvents({
             onInboxItem: (event: InboxItemEvent) => {
                 toastRef.current(`${itemAuthor(event) ?? "System"}: ${event.title}`);
-                void notifyInboxItem(event, () => go({ at: "inbox" }));
+                void notifyInboxItem(event);
             },
             onApproval: (event: ApprovalEvent) => announceApproval(event, toastRef.current),
         });
