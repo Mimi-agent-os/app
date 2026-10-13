@@ -7,12 +7,14 @@ import {
     Suspense,
     useCallback,
     useEffect,
+    useId,
     useLayoutEffect,
     useMemo,
     useRef,
     useState,
+    useSyncExternalStore,
 } from "react";
-import type { DragEvent, ReactElement, SyntheticEvent } from "react";
+import type { CSSProperties, DragEvent, ReactElement, SyntheticEvent } from "react";
 import { createPortal, flushSync } from "react-dom";
 
 import { buildPasted, parsePasted, type OwnerAnswer, type OwnerQuestion, type Paste } from "@mimi-os/protocol";
@@ -38,6 +40,8 @@ import {
 import { agentState, openEmptyChat, refreshAgent, useChats } from "../agent-chats.ts";
 import { useInterfaces, type AgentApp } from "../app-api.ts";
 import { resolveApproval } from "../approval-api.ts";
+import mascot from "../assets/mimi-mascot.png";
+import { useAvatar } from "../avatars.ts";
 import { ApiError, getSnapshot } from "../channel.ts";
 import type { ApprovalResolvedEvent, ChatChangedDetail } from "../events.ts";
 import { useChatActions } from "../components/chat-row.tsx";
@@ -53,7 +57,7 @@ import { useToast } from "../components/toast.tsx";
 import { AgentMark, BackButton, Btn, Disclose, Empty, LoadBoundary } from "../components/ui.tsx";
 import { isLongPaste, newPaste, tooLarge } from "../pasted.ts";
 import { go, here, holdBack, releaseBack } from "../route.ts";
-import { clock, countdown, errorMessage, Err, isDelegation, kilo, plural, SOFT_KEYS, useDevDetails, when } from "../shared.ts";
+import { clock, countdown, errorMessage, Err, isDelegation, kilo, MOD, plural, SOFT_KEYS, useDevDetails, when } from "../shared.ts";
 import { usd } from "../spend.ts";
 import { androidApp } from "../tauri.ts";
 import { carryDraft, Composer, type ComposerHandle, type SubmitResult } from "./composer.tsx";
@@ -957,7 +961,7 @@ export function CallsTab({ agent }: { agent: string }): ReactElement {
 // ── the header ───────────────────────────────────────────────────────────────
 
 const ChatHead = memo(function ChatHead({
-    agent, title, emptyChat, word, tone, elsewhere, renaming, web, app, apps, onView, onRenameStart, onRename, onMenu, onPick,
+    agent, title, emptyChat, word, tone, elsewhere, renaming, view, mode, app, apps, bare, onView, onSide, onRenameStart, onRename, onMenu, onPick,
 }: {
     agent: string;
     title: string;
@@ -966,11 +970,16 @@ const ChatHead = memo(function ChatHead({
     tone?: string | undefined;
     elsewhere: number;
     renaming: boolean;
-    /** Whether the agent's interface shows in place of the thread; null hides the switch. */
-    web: boolean | null;
+    /** What the screen shows: the thread, the agent's interface in its place, or the interface filling the window; null hides the switch. */
+    view: ChatMode | null;
+    /** The stored choice, which the interface picker keeps: narrower than 1100px a remembered Full shows as Web. */
+    mode: ChatMode;
     app: string | undefined;
     apps: readonly AgentApp[];
-    onView: (web: boolean, app: string | undefined) => void;
+    /** Full with the app's sidebar hidden: a control brings it back. */
+    bare: boolean;
+    onView: (mode: ChatMode, app: string | undefined) => void;
+    onSide: () => void;
     onRenameStart: () => void;
     /** null cancels. */
     onRename: (title: string | null) => void;
@@ -981,6 +990,15 @@ const ChatHead = memo(function ChatHead({
     return (
         <header className="head chat-head">
             <BackButton count={elsewhere} />
+            {bare && (
+                <button type="button" className="btn icon chat-side" aria-label="Show the sidebar" title={`Show the sidebar (${MOD}B)`} onClick={() => {
+                    flushSync(onSide);
+                    // this control leaves as the sidebar comes back: focus goes to the sidebar's own control, which hides it again
+                    document.querySelector<HTMLButtonElement>(".side :is(.home-fold, .rail .home-head .btn)")?.focus();
+                }}>
+                    <Icon name="side" />
+                </button>
+            )}
             <div className="head-main">
                 <h1 className="head-title">
                     {renaming ? (
@@ -1030,23 +1048,25 @@ const ChatHead = memo(function ChatHead({
                 </div>
             </div>
             <div className="head-acts">
-                {web !== null && (
+                {view !== null && (
                     <div className="seg chat-view" role="group" aria-label="Show">
-                        {/* at 900px and below the pressed button hides, so focus moves to the one shown in its place */}
-                        <button type="button" className={web ? "" : "on"} aria-pressed={!web} onClick={(e) => {
+                        {/* at 900px and below the pressed button hides, so focus moves to the one shown in its place; Full shows from 1100px */}
+                        <button type="button" className={view === "chat" ? "on" : ""} aria-pressed={view === "chat"} onClick={(e) => {
                             const b = e.currentTarget;
-                            flushSync(() => onView(false, app));
+                            flushSync(() => onView("chat", app));
                             if (!b.checkVisibility()) (b.nextElementSibling as HTMLButtonElement | null)?.focus();
                         }}>Chat</button>
-                        <button type="button" className={web ? "on" : ""} aria-pressed={web} onClick={(e) => {
+                        <button type="button" className={view === "web" ? "on" : ""} aria-pressed={view === "web"} onClick={(e) => {
                             const b = e.currentTarget;
-                            flushSync(() => onView(true, app));
+                            flushSync(() => onView("web", app));
                             if (!b.checkVisibility()) (b.previousElementSibling as HTMLButtonElement | null)?.focus();
                         }}>Web</button>
+                        <button type="button" className={view === "full" ? "chat-view-full on" : "chat-view-full"} aria-pressed={view === "full"}
+                            title="The interface fills the window, the chat one click away" onClick={() => onView("full", app)}>Full</button>
                     </div>
                 )}
-                {web === true && apps.length > 1 && (
-                    <select className="chat-web-pick" aria-label="Interface" value={app} onChange={(e) => onView(true, e.target.value)}>
+                {view !== null && view !== "chat" && apps.length > 1 && (
+                    <select className="chat-web-pick" aria-label="Interface" value={app} onChange={(e) => onView(mode, e.target.value)}>
                         {apps.map((a) => <option key={a.appId} value={a.appId}>{a.title}</option>)}
                     </select>
                 )}
@@ -1080,15 +1100,17 @@ export function ChatPending({ agent }: { agent: string }): ReactElement {
                     <button type="button" className="btn icon" aria-label="Chat actions" disabled><Icon name="more" /></button>
                 </div>
             </header>
-            <div className="thread">
-                <ChatStart agent={agent} />
-            </div>
-            <div className="chat-dock">
-                <div className="composer">
-                    <textarea rows={1} disabled aria-label={`Message ${agent}`} placeholder={`Message ${agent}`} />
-                    <div className="composer-bar">
-                        <span className="composer-hint">Enter sends · Shift+Enter new line · / commands</span>
-                        <Btn kind="send" icon="send" disabled>Send</Btn>
+            <div className="chat-pane">
+                <div className="thread">
+                    <ChatStart agent={agent} />
+                </div>
+                <div className="chat-dock">
+                    <div className="composer">
+                        <textarea rows={1} disabled aria-label={`Message ${agent}`} placeholder={`Message ${agent}`} />
+                        <div className="composer-bar">
+                            <span className="composer-hint">Enter sends · Shift+Enter new line · / commands</span>
+                            <Btn kind="send" icon="send" disabled>Send</Btn>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1124,8 +1146,22 @@ function ChatStart({ agent, recent = [] }: { agent: string; recent?: readonly Co
 const QUEUE = new Map<string, string[]>();
 const QUEUE_KEY = "mimi-os:chat-queue";
 
-// the Chat or Web choice and the interface picked, per agent, for as long as the app runs
-const VIEWS = new Map<string, { web: boolean; app: string | undefined }>();
+type ChatMode = "chat" | "web" | "full";
+
+// the Chat, Web or Full choice and the interface picked, per agent, for as long as the app runs
+const VIEWS = new Map<string, { mode: ChatMode; app: string | undefined }>();
+
+// Full: the interface fills the window and the chat is a panel over it, from this width; narrower, Full shows as Web
+const roomyQuery = matchMedia("(min-width: 1100px)");
+const onRoomyChange = (listener: () => void): (() => void) => {
+    roomyQuery.addEventListener("change", listener);
+    return () => roomyQuery.removeEventListener("change", listener);
+};
+// per agent: "open" while the panel is open, no key while it is closed
+const PANEL_KEY = "mimi-os:chat-panel";
+const PANEL_W_KEY = "mimi-os:chat-panel-w";
+const PANEL_MIN = 320;
+const PANEL_MAX = 640;
 
 // ── the chat ─────────────────────────────────────────────────────────────────
 
@@ -1134,12 +1170,18 @@ interface ChatProps {
     conversation: number;
     me: AgentSummary;
     agents: readonly AgentSummary[];
-    gated: boolean;
+    /** Approvals and questions the gateway holds open in this chat. */
+    gates: number;
     elsewhere: number;
     slash: readonly Command[];
+    /** The shell's sidebar is hidden while this chat is in Full; the shell owns it, and onSide shows or hides it. */
+    bare: boolean;
+    onSide: () => void;
+    /** Tells the shell whether this chat is in Full, so its sidebar controls show or hide the sidebar whole. */
+    onFull: (full: boolean) => void;
 }
 
-function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: ChatProps): ReactElement {
+function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, bare, onSide, onFull }: ChatProps): ReactElement {
     const key = `${agent}#${conversation}`;
     // the loaded window of history, oldest first; null until the first page, since an empty thread and an unread one differ
     const [rows, setRows] = useState<HistoryMessage[] | null>(() => HISTORY_CACHE.get(key)?.rows ?? null);
@@ -1194,16 +1236,52 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
     const listed = listRows?.find((c) => c.id === conversation);
     const headFailed = useRef("");
     const interfaces = useInterfaces(agent, me.connected);
-    const [view, setView] = useState(() => VIEWS.get(agent) ?? { web: false, app: undefined });
+    const [view, setView] = useState(() => VIEWS.get(agent) ?? { mode: "chat" as ChatMode, app: undefined });
     const webApp = interfaces.apps.find((a) => a.appId === view.app) ?? interfaces.apps[0];
-    // a remembered Web holds through the first read of the list, so the thread does not flash in first
-    const onWeb = !androidApp && view.web && (webApp !== undefined || (interfaces.loading && interfaces.error === null));
+    // a remembered Web or Full holds through the first read of the list, so the thread does not flash in first
+    const onWeb = !androidApp && view.mode !== "chat" && (webApp !== undefined || (interfaces.loading && interfaces.error === null));
+    const roomy = useSyncExternalStore(onRoomyChange, () => roomyQuery.matches);
+    const full = onWeb && view.mode === "full" && roomy;
     const [webSeen, setWebSeen] = useState(onWeb);
     if (onWeb && !webSeen) setWebSeen(true);
-    const onView = useCallback((web: boolean, app: string | undefined): void => {
-        VIEWS.set(agent, { web, app });
-        setView({ web, app });
+    // the thread's shape where it was last in sight, the screen's body or Full's panel: Web hides it in that shape
+    const [panelShape, setPanelShape] = useState(full);
+    if (!onWeb && panelShape) setPanelShape(false);
+    if (full && !panelShape) setPanelShape(true);
+    // set by a click on the panel's button, so only that moves the panel: a switch of view shows or hides it in place
+    const [toggled, setToggled] = useState(false);
+    const onView = useCallback((mode: ChatMode, app: string | undefined): void => {
+        VIEWS.set(agent, { mode, app });
+        setView({ mode, app });
+        setToggled(false);
     }, [agent]);
+    const [panelOpen, setPanelOpen] = useState(() => {
+        try {
+            return localStorage.getItem(`${PANEL_KEY}:${agent}`) === "open";
+        } catch {
+            return false;
+        }
+    });
+    const [panelWidth, setPanelWidth] = useState(() => {
+        let stored = 0;
+        try {
+            stored = Number(localStorage.getItem(PANEL_W_KEY));
+        } catch {
+            // private mode: the panel opens at its default width
+        }
+        return Math.min(PANEL_MAX, Math.max(PANEL_MIN, stored || 420));
+    });
+    // before paint, so the sidebar never flashes in for a frame on the way into Full or out of it
+    useLayoutEffect(() => {
+        onFull(full);
+        return () => onFull(false);
+    }, [full, onFull]);
+    // the panel's left edge while it is dragged: written to the screen's style per move, committed to state on release
+    const resize = useRef<{ from: number; start: number; width: number } | null>(null);
+    const avatar = useAvatar(agent);
+    const paneId = useId();
+    const pane = useRef<HTMLDivElement | null>(null);
+    const launcher = useRef<HTMLButtonElement | null>(null);
     const composer = useRef<ComposerHandle | null>(null);
 
     const thread = useRef<HTMLDivElement | null>(null);
@@ -1868,21 +1946,30 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
     let pending: { turn: number; gate: Gate } | null = null;
     // a question takes no gate shortcut: ⌘⏎ and Escape answer approvals only
     let asking = false;
+    let open = 0;
     for (const it of live) {
         if (it.kind !== "turn") continue;
         for (const s of it.segments) {
-            if (s.kind === "gate" && s.gate.state === "open") pending = { turn: it.id, gate: s.gate };
-            if (s.kind === "ask" && s.ask.outcome === "open") asking = true;
+            if (s.kind === "gate" && s.gate.state === "open") {
+                pending = { turn: it.id, gate: s.gate };
+                open += 1;
+            }
+            if (s.kind === "ask" && s.ask.outcome === "open") {
+                asking = true;
+                open += 1;
+            }
         }
     }
     const waiting = pending !== null;
+    // the gateway's list and this screen's stream each see the same gates, one of them sooner
+    const count = Math.max(gates, open);
 
     // only the newest open gate is bound, re-bound on every change so ⌘⏎ sends the ticks as they stand
     useEffect(() => {
         if (!pending) return undefined;
         const { turn, gate } = pending;
         const onKey = (e: KeyboardEvent): void => {
-            if (e.isComposing || e.defaultPrevented || !thread.current?.getClientRects().length || thread.current.inert) return;
+            if (e.isComposing || e.defaultPrevented || !thread.current?.getClientRects().length || thread.current.closest("[inert]")) return;
             if (document.querySelector('dialog[open], [aria-modal="true"], [role="menu"]')) return;
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
@@ -1909,13 +1996,77 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
 
     const responding = busy || stillBusy(row);
     const quiet = agentState(me, false, false);
-    const word = gated || waiting || asking ? "needs you" : responding ? "responding" : quiet?.word;
-    const tone = gated || waiting || asking ? "warn" : responding ? "accent" : quiet?.tone;
+    const word = gates > 0 || waiting || asking ? "needs you" : responding ? "responding" : quiet?.word;
+    const tone = gates > 0 || waiting || asking ? "warn" : responding ? "accent" : quiet?.tone;
+
+    // a reply that ends while the panel is closed leaves a dot on its button until the chat is in view again
+    const [unseen, setUnseen] = useState(false);
+    const [wasResponding, setWasResponding] = useState(responding);
+    if (responding !== wasResponding) {
+        setWasResponding(responding);
+        if (!responding && full && !panelOpen) setUnseen(true);
+    }
+    if (unseen && (!full || panelOpen)) setUnseen(false);
+    const chatShown = !onWeb || (full && panelOpen);
+
+    const togglePanel = useCallback((): void => {
+        const opening = !panelOpen;
+        flushSync(() => {
+            setPanelOpen(opening);
+            setToggled(true);
+        });
+        try {
+            if (opening) localStorage.setItem(`${PANEL_KEY}:${agent}`, "open");
+            else localStorage.removeItem(`${PANEL_KEY}:${agent}`);
+        } catch {
+            // private mode: the panel still opens and closes, it just forgets
+        }
+        if (!opening) {
+            launcher.current?.focus();
+            return;
+        }
+        // what the count on the button promised waits at the thread's foot
+        if (count > 0) toBottom();
+        composer.current?.focus();
+        if (!pane.current?.contains(document.activeElement)) pane.current?.querySelector<HTMLButtonElement>(".chat-pane-close")?.focus();
+    }, [panelOpen, count, agent, toBottom]);
+
+    // on document: a field's own Escape (the slash list, a rename) comes first, and the gate's binding on window after it, so Escape never denies here
+    useEffect(() => {
+        if (!full) return undefined;
+        const onKey = (e: KeyboardEvent): void => {
+            if (e.key !== "Escape" || e.defaultPrevented || e.isComposing || (!panelOpen && !bare)) return;
+            if (document.querySelector('dialog[open], [aria-modal="true"], [role="menu"]')) return;
+            e.preventDefault();
+            if (panelOpen) togglePanel();
+            else onSide();
+        };
+        // an Escape inside the interface, forwarded by its bridge: it closes the panel, but never brings the sidebar back over a page in use
+        const onFrameKey = (e: Event): void => {
+            if ((e as CustomEvent<string>).detail === "Escape" && panelOpen) togglePanel();
+        };
+        document.addEventListener("keydown", onKey);
+        window.addEventListener("mimi:frame-key", onFrameKey);
+        return () => {
+            document.removeEventListener("keydown", onKey);
+            window.removeEventListener("mimi:frame-key", onFrameKey);
+        };
+    }, [full, panelOpen, bare, onSide, togglePanel]);
+
+    const setWidth = (width: number): void => {
+        const next = Math.min(PANEL_MAX, Math.max(PANEL_MIN, width));
+        setPanelWidth(next);
+        try {
+            localStorage.setItem(PANEL_W_KEY, String(next));
+        } catch {
+            // private mode: the width holds until the chat closes
+        }
+    };
     const blocked = !me.connected ? `${agent} is offline` : me.paused ? `${agent} is paused. Resume it to send.` : null;
     // files dragged from the desktop drop anywhere on the chat; enter and leave fire per child, so they are counted
     const [dropping, setDropping] = useState(false);
     const dragDepth = useRef(0);
-    const takesDrop = (e: DragEvent<HTMLElement>): boolean => !onWeb && blocked === null && e.dataTransfer.types.includes("Files");
+    const takesDrop = (e: DragEvent<HTMLElement>): boolean => chatShown && blocked === null && e.dataTransfer.types.includes("Files");
     const compact = slash.find((c) => c.slash === "/compact");
     const recent = emptyChat ? (listRows ?? []).filter((c) => c.id !== conversation && !c.archived && !isDelegation(c) && c.messages > 0).slice(0, 2) : [];
 
@@ -1923,7 +2074,11 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
         <section
             className="chat-screen"
             aria-label={title}
-            data-view={onWeb ? "web" : undefined}
+            data-view={full ? "full" : onWeb ? "web" : undefined}
+            data-open={full && panelOpen ? "" : undefined}
+            data-toggled={full && toggled ? "" : undefined}
+            data-panel={panelShape ? "" : undefined}
+            style={{ "--pane-w": `${panelWidth}px` } as CSSProperties}
             onDragEnter={(e) => {
                 if (!takesDrop(e)) return;
                 dragDepth.current += 1;
@@ -1955,132 +2110,203 @@ function ChatView({ agent, conversation, me, agents, gated, elsewhere, slash }: 
                 tone={tone}
                 elsewhere={elsewhere}
                 renaming={renaming}
-                web={androidApp || (webApp === undefined && !onWeb) ? null : onWeb}
+                view={androidApp || (webApp === undefined && !onWeb) ? null : full ? "full" : onWeb ? "web" : "chat"}
+                mode={view.mode}
                 app={webApp?.appId}
                 apps={interfaces.apps}
+                bare={full && bare}
                 onView={onView}
+                onSide={onSide}
                 onRenameStart={onRenameStart}
                 onRename={onRename}
                 onMenu={setMenu}
                 onPick={setPick}
             />
-            <div className="thread" ref={thread} onScroll={onScroll} inert={onWeb}>
-                {/* zero height with margin-top:auto: a short history settles at the bottom without breaking scroll */}
-                {!emptyChat && <div className="threadfill" />}
-                {syncError && (
-                    <Err>
-                        <span>{syncError}</span>
-                        <Btn kind="quiet" sm disabled={busy} onClick={refresh}>Refresh response</Btn>
-                    </Err>
+            {/* one thread and one dock in every view: Full lifts them into a panel over the interface, so the scroll, the draft and the cards never move */}
+            <div className="chat-pane" id={paneId} ref={pane} inert={!chatShown} role={full ? "dialog" : undefined} aria-label={full ? `Chat with ${agent}` : undefined}>
+                {panelShape && (
+                    <header className="chat-pane-head">
+                        <AgentMark agent={agent} />
+                        <b>{agent}</b>
+                        {word && <span className="state" data-tone={tone}>{word}</span>}
+                        <button type="button" className="btn icon chat-pane-close" aria-label="Close the chat" title="Close (Escape)" onClick={togglePanel}>
+                            <Icon name="close" />
+                        </button>
+                    </header>
                 )}
-                {error && <Err>{error}</Err>}
-                {rows === null && !error && !emptyChat && (
-                    <div className="skel-wait" aria-hidden="true">
-                        {[0, 1, 2].map((n) => (
-                            <article key={n} className="msg" data-speaker="agent">
-                                <header className="msg-who"><span className="skel" style={{ width: 88 }} /></header>
-                                <div className="msg-body">
-                                    <span className="skel" style={{ width: "94%" }} />
-                                    <span className="skel" style={{ width: n % 2 ? "68%" : "82%" }} />
-                                </div>
-                            </article>
-                        ))}
-                    </div>
-                )}
-                {rows !== null && (older ? (
-                    <div className="thread-top" role="status" aria-label="Loading older messages"><span className="skel" style={{ width: 140 }} /></div>
-                ) : more && (
-                    // keyed off `more`, never the page size: the gateway skips a corrupt row without refilling its slot
-                    <div className="thread-top">{rows.length === 0 ? "Older messages exist, but this page gave nothing to page back from." : "Scroll up to load older messages."}</div>
-                ))}
-                {emptyChat ? <ChatStart agent={agent} recent={recent} /> : rows !== null && (
-                    <div className={fresh ? "thread-past enter" : "thread-past"}>
-                        <PastThread
-                            agent={agent}
-                            items={past}
-                            editing={editing}
-                            canEdit={!busy}
-                            onEdit={setEditing}
-                            onEditSave={onEditSave}
-                            onEditCancel={onEditCancel}
-                            onImage={onImage}
-                            onOpenPaste={onOpenPaste}
-                        />
-                    </div>
-                )}
-                {live.map((it) =>
-                    it.kind === "msg" ? (
-                        // no edit here: a live message has no db id to truncate from until the chat is next read
-                        <Bubble key={`l${it.id}`} speaker="human" who="You" text={it.text} images={it.images} sent onImage={onImage} onOpenPaste={onOpenPaste} />
-                    ) : (
-                        <TurnBlock key={`l${it.id}`} agent={agent} turn={it} now={it.id === pending?.turn ? now : 0} onToggle={toggle} onAnswer={answer} onSettle={settle} />
-                    ),
-                )}
-                {below && (
-                    // sticky with no height of its own: showing it must not count as new content arriving
-                    <div className="to-bottom-anchor">
-                        <button type="button" className="to-bottom" onClick={toBottom}><Icon name="chevron" sm />Jump to latest</button>
-                    </div>
-                )}
-            </div>
-            <div className="chat-dock" inert={onWeb}>
-                {/* above the box, not atop the thread: a long chat would keep it scrolled out of sight while the box waits on it */}
-                {notice && <Err><span>{notice}</span><Btn kind="quiet" sm onClick={() => setNotice("")}>Hide</Btn></Err>}
-                {queue.length > 0 && (
-                    <div className="queue">
-                        <p className="queue-note">
-                            {queue.length} queued. {busy ? "They send in order when this turn ends well." : "They go out in order after your next message."}
-                        </p>
-                        {queue.map((text, i) => {
-                            // a queued message is the text it will send: its pasted blocks show as names, and only the words are edited here
-                            const { pastes, text: typed } = parsePasted(text);
-                            return (
-                                // index keys: the entries have no identity of their own, and their order is what is being edited
-                                <div key={i} className="queue-row">
-                                    <span className="queue-n">{i + 1}</span>
-                                    <div className="queue-item">
-                                        {pastes.length > 0 && (
-                                            <div className="queue-pastes">
-                                                {pastes.map((p, j) => (
-                                                    <button key={j} type="button" className="queue-paste" title={`Open ${p.title}`} onClick={(e) => onOpenPaste(p, e.currentTarget)}>{p.title}</button>
-                                                ))}
-                                            </div>
-                                        )}
-                                        <textarea
-                                            className="queue-text"
-                                            rows={1}
-                                            aria-label={`Queued message ${i + 1}`}
-                                            value={typed}
-                                            onChange={(e) => writeQueue(queued.current.map((q, j) => (j === i ? buildPasted(parsePasted(q).pastes, e.target.value) : q)))}
-                                        />
+                <div className="thread" ref={thread} onScroll={onScroll}>
+                    {/* zero height with margin-top:auto: a short history settles at the bottom without breaking scroll */}
+                    {!emptyChat && <div className="threadfill" />}
+                    {syncError && (
+                        <Err>
+                            <span>{syncError}</span>
+                            <Btn kind="quiet" sm disabled={busy} onClick={refresh}>Refresh response</Btn>
+                        </Err>
+                    )}
+                    {error && <Err>{error}</Err>}
+                    {rows === null && !error && !emptyChat && (
+                        <div className="skel-wait" aria-hidden="true">
+                            {[0, 1, 2].map((n) => (
+                                <article key={n} className="msg" data-speaker="agent">
+                                    <header className="msg-who"><span className="skel" style={{ width: 88 }} /></header>
+                                    <div className="msg-body">
+                                        <span className="skel" style={{ width: "94%" }} />
+                                        <span className="skel" style={{ width: n % 2 ? "68%" : "82%" }} />
                                     </div>
-                                    <Btn kind="quiet" sm icon="close" title="Remove from the queue" onClick={() => writeQueue(queued.current.filter((_, j) => j !== i))} />
-                                </div>
-                            );
-                        })}
-                    </div>
+                                </article>
+                            ))}
+                        </div>
+                    )}
+                    {rows !== null && (older ? (
+                        <div className="thread-top" role="status" aria-label="Loading older messages"><span className="skel" style={{ width: 140 }} /></div>
+                    ) : more && (
+                        // keyed off `more`, never the page size: the gateway skips a corrupt row without refilling its slot
+                        <div className="thread-top">{rows.length === 0 ? "Older messages exist, but this page gave nothing to page back from." : "Scroll up to load older messages."}</div>
+                    ))}
+                    {emptyChat ? <ChatStart agent={agent} recent={recent} /> : rows !== null && (
+                        <div className={fresh ? "thread-past enter" : "thread-past"}>
+                            <PastThread
+                                agent={agent}
+                                items={past}
+                                editing={editing}
+                                canEdit={!busy}
+                                onEdit={setEditing}
+                                onEditSave={onEditSave}
+                                onEditCancel={onEditCancel}
+                                onImage={onImage}
+                                onOpenPaste={onOpenPaste}
+                            />
+                        </div>
+                    )}
+                    {live.map((it) =>
+                        it.kind === "msg" ? (
+                            // no edit here: a live message has no db id to truncate from until the chat is next read
+                            <Bubble key={`l${it.id}`} speaker="human" who="You" text={it.text} images={it.images} sent onImage={onImage} onOpenPaste={onOpenPaste} />
+                        ) : (
+                            <TurnBlock key={`l${it.id}`} agent={agent} turn={it} now={it.id === pending?.turn ? now : 0} onToggle={toggle} onAnswer={answer} onSettle={settle} />
+                        ),
+                    )}
+                    {below && (
+                        // sticky with no height of its own: showing it must not count as new content arriving
+                        <div className="to-bottom-anchor">
+                            <button type="button" className="to-bottom" onClick={toBottom}><Icon name="chevron" sm />Jump to latest</button>
+                        </div>
+                    )}
+                </div>
+                <div className="chat-dock">
+                    {/* above the box, not atop the thread: a long chat would keep it scrolled out of sight while the box waits on it */}
+                    {notice && <Err><span>{notice}</span><Btn kind="quiet" sm onClick={() => setNotice("")}>Hide</Btn></Err>}
+                    {queue.length > 0 && (
+                        <div className="queue">
+                            <p className="queue-note">
+                                {queue.length} queued. {busy ? "They send in order when this turn ends well." : "They go out in order after your next message."}
+                            </p>
+                            {queue.map((text, i) => {
+                                // a queued message is the text it will send: its pasted blocks show as names, and only the words are edited here
+                                const { pastes, text: typed } = parsePasted(text);
+                                return (
+                                    // index keys: the entries have no identity of their own, and their order is what is being edited
+                                    <div key={i} className="queue-row">
+                                        <span className="queue-n">{i + 1}</span>
+                                        <div className="queue-item">
+                                            {pastes.length > 0 && (
+                                                <div className="queue-pastes">
+                                                    {pastes.map((p, j) => (
+                                                        <button key={j} type="button" className="queue-paste" title={`Open ${p.title}`} onClick={(e) => onOpenPaste(p, e.currentTarget)}>{p.title}</button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <textarea
+                                                className="queue-text"
+                                                rows={1}
+                                                aria-label={`Queued message ${i + 1}`}
+                                                value={typed}
+                                                onChange={(e) => writeQueue(queued.current.map((q, j) => (j === i ? buildPasted(parsePasted(q).pastes, e.target.value) : q)))}
+                                            />
+                                        </div>
+                                        <Btn kind="quiet" sm icon="close" title="Remove from the queue" onClick={() => writeQueue(queued.current.filter((_, j) => j !== i))} />
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                    <Composer
+                        ref={composer}
+                        agent={agent}
+                        draftKey={key}
+                        busy={busy}
+                        stopPending={stopPending}
+                        ready={rows !== null}
+                        waiting={waiting}
+                        queued={queue.length}
+                        canAttach={currentModel?.vision === true}
+                        noImages={currentModel && !currentModel.vision ? currentModel.name : null}
+                        meter={meter}
+                        slash={slash}
+                        blocked={blocked}
+                        onSubmit={onSubmit}
+                        onStop={onStop}
+                        onNotice={setNotice}
+                        onOpenPaste={onOpenPaste}
+                    />
+                    {row?.archived && <p className="chat-status">Archived. It stays out of the list until you unarchive it.</p>}
+                </div>
+                {panelShape && (
+                    // the panel hangs from the right edge, so its left edge dragged or arrowed left widens it
+                    <div
+                        className="chat-pane-grip"
+                        role="separator"
+                        aria-orientation="vertical"
+                        aria-label="Chat width"
+                        aria-controls={paneId}
+                        aria-valuemin={PANEL_MIN}
+                        aria-valuemax={PANEL_MAX}
+                        aria-valuenow={panelWidth}
+                        tabIndex={0}
+                        onPointerDown={(e) => {
+                            if (e.button !== 0) return;
+                            e.preventDefault();
+                            e.currentTarget.setPointerCapture(e.pointerId);
+                            resize.current = { from: e.clientX, start: panelWidth, width: panelWidth };
+                            e.currentTarget.closest<HTMLElement>(".chat-screen")?.setAttribute("data-resizing", "");
+                        }}
+                        onPointerMove={(e) => {
+                            const drag = resize.current;
+                            if (!drag) return;
+                            drag.width = Math.min(PANEL_MAX, Math.max(PANEL_MIN, Math.round(drag.start + drag.from - e.clientX)));
+                            e.currentTarget.closest<HTMLElement>(".chat-screen")?.style.setProperty("--pane-w", `${drag.width}px`);
+                        }}
+                        onLostPointerCapture={(e) => {
+                            const drag = resize.current;
+                            if (!drag) return;
+                            resize.current = null;
+                            e.currentTarget.closest<HTMLElement>(".chat-screen")?.removeAttribute("data-resizing");
+                            setWidth(drag.width);
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+                            e.preventDefault();
+                            const step = e.shiftKey ? 64 : 16;
+                            setWidth(panelWidth + (e.key === "ArrowLeft" ? step : -step));
+                        }}
+                    />
                 )}
-                <Composer
-                    ref={composer}
-                    agent={agent}
-                    draftKey={key}
-                    busy={busy}
-                    stopPending={stopPending}
-                    ready={rows !== null}
-                    waiting={waiting}
-                    queued={queue.length}
-                    canAttach={currentModel?.vision === true}
-                    noImages={currentModel && !currentModel.vision ? currentModel.name : null}
-                    meter={meter}
-                    slash={slash}
-                    blocked={blocked}
-                    onSubmit={onSubmit}
-                    onStop={onStop}
-                    onNotice={setNotice}
-                    onOpenPaste={onOpenPaste}
-                />
-                {row?.archived && <p className="chat-status">Archived. It stays out of the list until you unarchive it.</p>}
             </div>
+            {full && !panelOpen && (
+                <button
+                    ref={launcher}
+                    type="button"
+                    className="chat-launch"
+                    aria-controls={paneId}
+                    aria-expanded="false"
+                    aria-label={`Open the chat with ${agent}${count > 0 ? `, ${count} waiting for you` : unseen ? ", new reply" : ""}`}
+                    title="Chat"
+                    onClick={togglePanel}
+                >
+                    <img src={avatar ?? mascot} alt="" draggable={false} data-avatar={avatar ? "" : undefined} />
+                    {count > 0 ? <span className="count warn">{count}</span> : unseen && <span className="dot" data-tone="accent" />}
+                </button>
+            )}
             {webSeen && (
                 <div className="chat-web" hidden={!onWeb}>
                     <LoadBoundary>

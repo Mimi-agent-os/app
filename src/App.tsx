@@ -39,6 +39,8 @@ const Inbox = lazy(() => import("./views/inbox.tsx"));
 
 // two states: folded writes "off", unfolded removes the key
 const SIDE_KEY = "mimi-os:sidebar";
+// a chat in Full hides the sidebar whole: "on" once the owner brought it back there, no key while Full hides it
+const BARE_KEY = "mimi-os:full-sidebar";
 
 const wideQuery = matchMedia(WIDE);
 const onWideChange = (listener: () => void): (() => void) => {
@@ -111,6 +113,27 @@ function Shell(): ReactElement {
             return !was;
         });
     }, []);
+    const [bare, setBare] = useState<boolean>(() => {
+        try {
+            return localStorage.getItem(BARE_KEY) !== "on";
+        } catch {
+            return true;
+        }
+    });
+    const toggleBare = useCallback((): void => {
+        setBare((was) => {
+            try {
+                if (was) localStorage.setItem(BARE_KEY, "on");
+                else localStorage.removeItem(BARE_KEY);
+            } catch {
+                // private mode: the sidebar still comes and goes, it just forgets
+            }
+            return !was;
+        });
+    }, []);
+    // set by the open chat while it shows its interface in Full: every sidebar control then shows or hides the sidebar whole
+    const [inFull, setInFull] = useState(false);
+    const toggleSide = inFull ? toggleBare : toggleFold;
 
     // ── the gateway's state, each read with its own request serial ──────────────
 
@@ -276,7 +299,7 @@ function Shell(): ReactElement {
             const key = e.key.toLowerCase();
             if (key === "b" && wideQuery.matches) {
                 e.preventDefault();
-                toggleFold();
+                toggleSide();
                 return;
             }
             if (key !== "n" || document.querySelector("[aria-modal=true], dialog[open]")) return;
@@ -285,9 +308,17 @@ function Shell(): ReactElement {
             e.preventDefault();
             go({ at: "new", agent: now.agent });
         };
+        // the same chord pressed inside an interface, forwarded by its bridge
+        const onFrameKey = (e: Event): void => {
+            if ((e as CustomEvent<string>).detail === "b" && wideQuery.matches) toggleSide();
+        };
         window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, [toggleFold]);
+        window.addEventListener("mimi:frame-key", onFrameKey);
+        return () => {
+            window.removeEventListener("keydown", onKey);
+            window.removeEventListener("mimi:frame-key", onFrameKey);
+        };
+    }, [toggleSide]);
 
     // ── commands ──────────────────────────────────────────────────────────────────
 
@@ -450,18 +481,19 @@ function Shell(): ReactElement {
             },
         });
         if (wide) {
+            const hidden = inFull ? bare : folded;
             out.push({
                 id: "do:sidebar",
-                label: folded ? "Show the sidebar" : "Hide the sidebar",
+                label: hidden ? "Show the sidebar" : "Hide the sidebar",
                 group: "do",
-                icon: folded ? "chevron" : "back",
+                icon: hidden ? "chevron" : "back",
                 hint: `${MOD}B`,
                 keywords: "sidebar rail fold collapse expand",
-                run: toggleFold,
+                run: toggleSide,
             });
         }
         return out;
-    }, [agents, approvals, chats, recent, named, chatAgent, chatId, slash, native, wide, folded, toggleFold, reloadRegistries, toast]);
+    }, [agents, approvals, chats, recent, named, chatAgent, chatId, slash, native, wide, folded, inFull, bare, toggleSide, reloadRegistries, toast]);
 
     const palette = usePalette({ commands, initial, onError: (e) => toast(e.message) });
 
@@ -481,7 +513,7 @@ function Shell(): ReactElement {
     )
         : route?.at === "chat" && me && agents ? (
             <Chat key={`${route.agent}#${route.id}`} agent={route.agent} conversation={route.id} me={me} agents={agents}
-                gated={gatesHere > 0} elsewhere={approvals.length - gatesHere} slash={slash} />
+                gates={gatesHere} elsewhere={approvals.length - gatesHere} slash={slash} bare={bare} onSide={toggleBare} onFull={setInFull} />
         )
         : route?.at === "new" && me ? <ChatPending agent={route.agent} />
         : route?.at === "agent" && me ? (
@@ -507,12 +539,12 @@ function Shell(): ReactElement {
 
     return (
         <div className="app" data-side={folded && wide ? "off" : "on"} data-stack={route?.at === "home" ? "home" : "screen"}
-            data-bar={route?.at === "chat" || route?.at === "new" ? "off" : "on"}>
+            data-bar={route?.at === "chat" || route?.at === "new" ? "off" : "on"} data-bare={inFull && bare ? "" : undefined}>
             {/* null once this device has a paired session, a modal dialog otherwise */}
             <PairGate />
             <aside className="side">
                 <HomeList agents={agents} error={error} approvals={approvals} route={route}
-                    folded={folded && wide} onFold={toggleFold} onSearch={palette.open} onNewChat={() => palette.openWith("new chat")} onRetry={reloadRegistries} />
+                    folded={folded && wide} onFold={inFull && !folded ? toggleBare : toggleFold} onSearch={palette.open} onNewChat={() => palette.openWith("new chat")} onRetry={reloadRegistries} />
             </aside>
             <main className="work">{screen}</main>
             <NavBar route={route} rail={folded && wide} agents={agents} needs={approvals.length} unread={unread} waiting={waiting} />

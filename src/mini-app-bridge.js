@@ -192,6 +192,17 @@
         greet(0);
     });
 
+    // the pult cannot hear keys pressed in here: Escape and ⌘B go to it once the page has had them and left them unhandled
+    window.addEventListener("keydown", (event) => {
+        const chord = (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "b";
+        if (event.isComposing || event.repeat || (event.key !== "Escape" && !chord)) return;
+        // ⌘B in rich text is bold
+        if (chord && /** @type {HTMLElement | null} */ (event.target)?.isContentEditable) return;
+        setTimeout(() => {
+            if (!event.defaultPrevented) post({ t: "key", key: chord ? "b" : "Escape" });
+        }, 0);
+    });
+
     // ── one bridged exchange: an http app stream, resolved at its head ──────────
     /** @param {Exchange} req @returns {Promise<Reply>} */
     function exchange(req) {

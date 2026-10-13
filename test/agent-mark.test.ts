@@ -10,8 +10,8 @@ test("every place that shows an agent's mark draws AgentMark, and none draws the
     const places: [string, number][] = [
         // the sidebar row and the folded rail
         ["src/components/home-list.tsx", 2],
-        // the empty chat's welcome and the chat header
-        ["src/views/chat.tsx", 2],
+        // the empty chat's welcome, the chat header and Full's chat panel
+        ["src/views/chat.tsx", 3],
         ["src/views/agent-page.tsx", 1],
         ["src/views/inbox.tsx", 1],
         ["src/components/approval-requests.tsx", 1],

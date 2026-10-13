@@ -298,7 +298,7 @@ const postOp = (op: HttpOp | SocketOp, message: object, transfer: Transferable[]
 interface Raw {
     t?: unknown; id?: unknown; kind?: unknown; method?: unknown; path?: unknown; headers?: unknown; body?: unknown; chunk?: unknown;
     length?: unknown; credentials?: unknown; keepalive?: unknown; nav?: unknown; integrity?: unknown; n?: unknown; protocols?: unknown;
-    text?: unknown; bin?: unknown; code?: unknown; reason?: unknown; line?: unknown;
+    text?: unknown; bin?: unknown; code?: unknown; reason?: unknown; line?: unknown; key?: unknown;
 }
 
 function onPort(session: Session, data: unknown): void {
@@ -317,6 +317,12 @@ function onPort(session: Session, data: unknown): void {
         // a refused assignment still gets a snapshot, which corrects the frame's optimistic mirror
         if (storeCookies(scope, [m.line], "script")) cookiesChanged(session.appId);
         else post(session, { t: "cookies", list: scriptCookies(session.gateway, session.appId) });
+        return;
+    }
+    // Escape or ⌘B pressed in the frame (Full's chat panel, the sidebar), heard only while the frame holds focus: never a key that answers a gate
+    if (m.t === "key") {
+        if (m.key !== "Escape" && m.key !== "b") return bad();
+        if (document.activeElement === session.frame.el) window.dispatchEvent(new CustomEvent("mimi:frame-key", { detail: m.key }));
         return;
     }
     if (id === 0) return bad();

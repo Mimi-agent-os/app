@@ -577,6 +577,31 @@ test("a document whose app moved to another agent pin is closed at its next mess
     }
 });
 
+test("a key from the frame reaches the pult only while that frame holds focus, and only Escape or ⌘B", async () => {
+    const heard: [string, unknown][] = [];
+    Object.assign(pult, { dispatchEvent: (e: CustomEvent) => heard.push([e.type, e.detail]) });
+    const focus = { activeElement: null as unknown };
+    Object.assign(globalThis, { document: focus });
+    try {
+        const link = await connect("wren");
+        link.port.postMessage({ t: "key", key: "Escape" });
+        // the jar's reply proves the key before it was handled
+        link.port.postMessage({ t: "cookies" });
+        await until(() => find(link, "cookies"), "the jar");
+        assert.deepEqual(heard, [], "the frame does not hold focus");
+        focus.activeElement = link.frame.el;
+        link.port.postMessage({ t: "key", key: "Escape" });
+        link.port.postMessage({ t: "key", key: "b" });
+        await until(() => heard.length === 2, "two keys");
+        assert.deepEqual(heard, [["mimi:frame-key", "Escape"], ["mimi:frame-key", "b"]]);
+        link.port.postMessage({ t: "key", key: "Enter" });
+        await until(() => find(link, "fatal"), "fatal on any other key");
+        assert.equal(heard.length, 2);
+    } finally {
+        delete (globalThis as { document?: unknown }).document;
+    }
+});
+
 test("16 documents per app: the oldest is told to retry", async () => {
     const first = await connect("wren");
     const outer = first.frame;

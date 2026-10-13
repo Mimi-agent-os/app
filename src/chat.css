@@ -1,17 +1,59 @@
 /* ── the chat screen: header, thread, dock ── */
 
-.chat-screen{position:relative;display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:100%;min-height:0;min-width:0}
+.chat-screen{position:relative;display:grid;grid-template-rows:auto minmax(0,1fr);height:100%;min-height:0;min-width:0}
 /* files dragged over a chat: one quiet layer over the whole screen that never catches the drag itself */
 .drop-veil{position:absolute;inset:var(--s2);z-index:5;display:grid;place-items:center;border:1px dashed var(--line-2);border-radius:var(--r2);background:color-mix(in oklab,var(--panel) 90%,transparent);pointer-events:none}
 .drop-veil span{font:var(--f-md);font-weight:500;color:var(--ink-2)}
-.chat-screen>.thread{grid-area:2/1}
-.chat-screen>.chat-dock{grid-area:3/1}
+/* the thread over the dock; the same box is Full's panel, so neither ever moves in the tree */
+.chat-pane{grid-area:2/1;position:relative;display:flex;flex-direction:column;min-width:0;min-height:0}
+.chat-pane>.thread{flex:1 1 0}
+.chat-pane>.chat-dock{flex:none}
 
 /* Web: the agent's interface over the thread and the dock; hidden, not unmounted or display:none, they keep the thread's scroll and the draft */
-.chat-web{grid-area:2/1/4/2;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--panel)}
+.chat-web{grid-area:2/1;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--panel)}
 .chat-web[hidden]{display:none}
-.chat-screen[data-view=web]>:is(.thread,.chat-dock){visibility:hidden}
+.chat-screen[data-view=web]>.chat-pane{visibility:hidden}
 .chat-view button{padding:0 8px}
+@media (max-width:1099px){.chat-view .chat-view-full{display:none}}
+
+/* Full: the chat is a panel hung from the right edge over the page, which never reflows; Web keeps its shape (data-panel) so the hidden thread stays put */
+.chat-head>.chat-side{margin-left:calc(var(--s2) * -1)}
+.chat-screen[data-panel]>.chat-pane{z-index:2;justify-self:end;width:min(var(--pane-w),calc(100% - var(--s4)));margin:var(--s2);border:1px solid var(--line-2);border-radius:var(--r2);background:var(--panel)}
+.chat-screen[data-view=full]:not([data-open])>.chat-pane{visibility:hidden;opacity:0;translate:var(--s3) 0}
+.chat-pane-head{flex:none;display:flex;align-items:center;gap:var(--s2);min-width:0;height:44px;padding:0 var(--s1) 0 var(--s3);border-bottom:1px solid var(--line)}
+.chat-pane-head>b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--f-md);font-weight:600}
+.chat-pane-head>.chat-pane-close{margin-left:auto}
+.chat-screen[data-panel] .thread{padding:var(--s4) var(--s4) var(--s3)}
+.chat-screen[data-panel] .chat-dock{padding:0 var(--s3) var(--s3)}
+/* the panel is too narrow for the key hints beside the meter: the hint keeps its room as the bar's spacer */
+.chat-screen[data-panel] .composer-hint{visibility:hidden}
+/* the left edge takes the drag along its length; a short handle on the border line shows while it is hovered, dragged or focused */
+.chat-pane-grip{position:absolute;top:var(--s3);bottom:var(--s3);left:-6px;z-index:1;width:11px;cursor:col-resize;touch-action:none}
+.chat-pane-grip::after{content:"";position:absolute;top:50%;left:3.5px;width:4px;height:40px;margin-top:-20px;border-radius:2px}
+@media (hover:hover){.chat-pane-grip:hover::after{background:var(--ink-3)}}
+.chat-screen[data-resizing] .chat-pane-grip::after{background:var(--ink-2)}
+.chat-pane-grip:focus-visible{outline:none}
+.chat-pane-grip:focus-visible::after{background:var(--focus)}
+/* a drag crossing the page must stay the drag's, and the page's own cursor must not show through */
+.chat-screen[data-resizing]{cursor:col-resize;user-select:none}
+.chat-screen[data-resizing] iframe{pointer-events:none}
+/* the button that opens the panel: the agent's avatar, or mimi; a count while something waits here, a dot for a reply not yet seen */
+.chat-launch{grid-area:2/1;z-index:2;align-self:end;justify-self:end;position:relative;display:grid;place-items:center;width:48px;height:48px;margin:var(--s4);padding:0;border:1px solid var(--line-2);border-radius:50%;background:var(--panel-2);cursor:pointer}
+.chat-launch>img{width:30px;height:30px;object-fit:contain;pointer-events:none}
+.chat-launch>img[data-avatar]{width:100%;height:100%;border-radius:50%;object-fit:cover}
+@media (hover:hover){.chat-launch:hover{border-color:var(--ink-3);background:var(--panel-3)}}
+.chat-launch>.count{position:absolute;top:-5px;right:-5px;height:20px;min-width:20px;background:color-mix(in oklab,var(--warn) 18%,var(--panel-2));outline:2px solid var(--panel)}
+.chat-launch>.dot{position:absolute;top:1px;right:1px;width:10px;height:10px;outline:2px solid var(--panel-2)}
+/* the interface edge to edge: its title is the chat's header already, and Reload follows the agent-page note on the left, clear of the panel */
+.chat-screen[data-view=full] .interfaces-tab{gap:0;padding:0}
+.chat-screen[data-view=full] .interfaces-toolbar{display:none}
+.chat-screen[data-view=full] .interfaces-tab>:not(.interfaces-page){margin:var(--s3) var(--s4) 0}
+.chat-screen[data-view=full] .interfaces-page{display:grid;grid-template-columns:auto auto minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr);gap:0;min-height:0;flex:1 1 0}
+.chat-screen[data-view=full] .interfaces-page>*{grid-column:1/-1}
+.chat-screen[data-view=full] .interfaces-page>:is([role=status],.err){grid-row:2;margin:var(--s3) var(--s4) 0}
+.chat-screen[data-view=full] .interfaces-page>p:not([role]){grid-area:1/1;min-height:36px;padding:0 var(--s2) 0 var(--s4)}
+.chat-screen[data-view=full] .interfaces-page-actions{grid-area:1/2;align-items:center}
+.chat-screen[data-view=full] .interfaces-frame{grid-row:3;min-height:0;height:100%;border:0;border-top:1px solid var(--line);border-radius:0}
 .head .chat-web-pick{width:auto;max-width:180px;height:var(--ctl-h-sm);padding:0 6px;font:var(--f-sm);text-overflow:ellipsis}
 
 /* header */
@@ -300,9 +342,12 @@
 /* the phone scale sets message text at 15px; a text field stays at 16px, or iOS zooms on focus */
 @media (pointer:coarse){.composer textarea,.msg-edit textarea,.queue-text{font-size:17px}}
 
-/* motion: only your sent message rises in; history and streamed text never animate */
+/* motion: only your sent message rises in; history and streamed text never animate; Full's panel eases in and out only when its button or Escape moves it */
 @media (prefers-reduced-motion:no-preference){
   .msg.is-sent{animation:rise-in var(--dur-2) var(--ease-out) both}
+  .chat-screen[data-toggled]>.chat-pane{transition:opacity var(--dur-2) var(--ease-out),translate var(--dur-2) var(--ease-out),visibility 0s}
+  .chat-screen[data-toggled]:not([data-open])>.chat-pane{transition:opacity var(--dur-1) var(--ease-in),translate var(--dur-1) var(--ease-in),visibility 0s var(--dur-1)}
+  .chat-launch{animation:fade-in var(--dur-2) var(--ease-out) both}
   .chat-typing{animation:fade-in var(--dur-2) var(--ease-out) 300ms both}
   .chat-typing>i{animation:pulse 1.2s ease-in-out infinite}
   .chat-typing>i:nth-child(2){animation-delay:150ms}

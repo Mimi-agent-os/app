@@ -729,6 +729,30 @@ test("a multipart form posted into the frame goes through the bridge, then navig
     assert.equal(page.natives.submits, 1, "a urlencoded form keeps its body in WebKit and is left alone");
 });
 
+// ── keys the pult listens for ───────────────────────────────────────────────
+test("Escape and ⌘B go to the pult once the page has had them and left them unhandled; anything else stays in the page", async () => {
+    const page = await ready();
+    page.run("addEventListener('keydown', (e) => { if (e.handled) e.preventDefault(); })");
+    page.dispatch("keydown", { key: "Escape" });
+    page.dispatch("keydown", { key: "B", metaKey: true });
+    page.dispatch("keydown", { key: "b", ctrlKey: true });
+    page.dispatch("keydown", { key: "Escape", handled: true });
+    page.dispatch("keydown", { key: "b", metaKey: true, handled: true });
+    page.dispatch("keydown", { key: "Escape", repeat: true });
+    page.dispatch("keydown", { key: "Escape", isComposing: true });
+    page.dispatch("keydown", { key: "b", metaKey: true, target: { isContentEditable: true } });
+    page.dispatch("keydown", { key: "b", metaKey: true, shiftKey: true });
+    page.dispatch("keydown", { key: "b" });
+    page.dispatch("keydown", { key: "Enter", metaKey: true });
+    const keys = (): unknown[] => page.inbox.filter((m) => m.t === "key").map((m) => m["key"]);
+    assert.deepEqual(keys(), [], "nothing before the page's own listeners have run");
+    mock.timers.tick(0);
+    // bye goes out after them on the same port, so every key is in once it is
+    page.dispatch("pagehide");
+    await page.next("bye");
+    assert.deepEqual(keys(), ["Escape", "b", "b"]);
+});
+
 // ── losing the pult ─────────────────────────────────────────────────────────
 test("fatal with retry fails what is live and greets again after a backoff; without retry the bridge goes native for good", async () => {
     const page = await ready();
