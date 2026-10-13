@@ -57,7 +57,7 @@ import { useToast } from "../components/toast.tsx";
 import { AgentMark, BackButton, Btn, Disclose, Empty, LoadBoundary } from "../components/ui.tsx";
 import { isLongPaste, newPaste, tooLarge } from "../pasted.ts";
 import { go, here, holdBack, releaseBack } from "../route.ts";
-import { clock, countdown, errorMessage, Err, isDelegation, kilo, MOD, plural, SOFT_KEYS, useDevDetails, when } from "../shared.ts";
+import { clock, countdown, errorMessage, Err, isDelegation, kilo, plural, SOFT_KEYS, useDevDetails, when } from "../shared.ts";
 import { usd } from "../spend.ts";
 import { androidApp } from "../tauri.ts";
 import { carryDraft, Composer, type ComposerHandle, type SubmitResult } from "./composer.tsx";
@@ -961,7 +961,7 @@ export function CallsTab({ agent }: { agent: string }): ReactElement {
 // ── the header ───────────────────────────────────────────────────────────────
 
 const ChatHead = memo(function ChatHead({
-    agent, title, emptyChat, word, tone, elsewhere, renaming, view, mode, app, apps, bare, onView, onSide, onRenameStart, onRename, onMenu, onPick,
+    agent, title, emptyChat, word, tone, elsewhere, renaming, view, mode, app, apps, onView, onRenameStart, onRename, onMenu, onPick,
 }: {
     agent: string;
     title: string;
@@ -970,16 +970,13 @@ const ChatHead = memo(function ChatHead({
     tone?: string | undefined;
     elsewhere: number;
     renaming: boolean;
-    /** What the screen shows: the thread, the agent's interface in its place, or the interface filling the window; null hides the switch. */
-    view: ChatMode | null;
+    /** What the screen shows, the thread or the agent's interface in its place; null hides the switch. Full has no header. */
+    view: "chat" | "web" | null;
     /** The stored choice, which the interface picker keeps: narrower than 1100px a remembered Full shows as Web. */
     mode: ChatMode;
     app: string | undefined;
     apps: readonly AgentApp[];
-    /** Full with the app's sidebar hidden: a control brings it back. */
-    bare: boolean;
     onView: (mode: ChatMode, app: string | undefined) => void;
-    onSide: () => void;
     onRenameStart: () => void;
     /** null cancels. */
     onRename: (title: string | null) => void;
@@ -990,15 +987,6 @@ const ChatHead = memo(function ChatHead({
     return (
         <header className="head chat-head">
             <BackButton count={elsewhere} />
-            {bare && (
-                <button type="button" className="btn icon chat-side" aria-label="Show the sidebar" title={`Show the sidebar (${MOD}B)`} onClick={() => {
-                    flushSync(onSide);
-                    // this control leaves as the sidebar comes back: focus goes to the sidebar's own control, which hides it again
-                    document.querySelector<HTMLButtonElement>(".side :is(.home-fold, .rail .home-head .btn)")?.focus();
-                }}>
-                    <Icon name="side" />
-                </button>
-            )}
             <div className="head-main">
                 <h1 className="head-title">
                     {renaming ? (
@@ -1061,8 +1049,12 @@ const ChatHead = memo(function ChatHead({
                             flushSync(() => onView("web", app));
                             if (!b.checkVisibility()) (b.previousElementSibling as HTMLButtonElement | null)?.focus();
                         }}>Web</button>
-                        <button type="button" className={view === "full" ? "chat-view-full on" : "chat-view-full"} aria-pressed={view === "full"}
-                            title="The interface fills the window, the chat one click away" onClick={() => onView("full", app)}>Full</button>
+                        <button type="button" className="chat-view-full" aria-pressed={false} title="The interface fills the window, the chat one click away" onClick={(e) => {
+                            const screen = e.currentTarget.closest(".chat-screen");
+                            // this header leaves with Full: focus goes to Exit, the one control drawn in its place
+                            flushSync(() => onView("full", app));
+                            screen?.querySelector<HTMLButtonElement>(".chat-exit")?.focus();
+                        }}>Full</button>
                     </div>
                 )}
                 {view !== null && view !== "chat" && apps.length > 1 && (
@@ -1148,8 +1140,8 @@ const QUEUE_KEY = "mimi-os:chat-queue";
 
 type ChatMode = "chat" | "web" | "full";
 
-// the Chat, Web or Full choice and the interface picked, per agent, for as long as the app runs
-const VIEWS = new Map<string, { mode: ChatMode; app: string | undefined }>();
+// the Chat, Web or Full choice, the interface picked and the view Full was entered from, per agent, for as long as the app runs
+const VIEWS = new Map<string, { mode: ChatMode; app: string | undefined; from: "chat" | "web" }>();
 
 // Full: the interface fills the window and the chat is a panel over it, from this width; narrower, Full shows as Web
 const roomyQuery = matchMedia("(min-width: 1100px)");
@@ -1162,6 +1154,8 @@ const PANEL_KEY = "mimi-os:chat-panel";
 const PANEL_W_KEY = "mimi-os:chat-panel-w";
 const PANEL_MIN = 320;
 const PANEL_MAX = 640;
+// how long the line saying whose page this is stays on entering Full; chat.css fades it out just before
+const NOTE_MS = 4000;
 
 // ── the chat ─────────────────────────────────────────────────────────────────
 
@@ -1174,14 +1168,11 @@ interface ChatProps {
     gates: number;
     elsewhere: number;
     slash: readonly Command[];
-    /** The shell's sidebar is hidden while this chat is in Full; the shell owns it, and onSide shows or hides it. */
-    bare: boolean;
-    onSide: () => void;
-    /** Tells the shell whether this chat is in Full, so its sidebar controls show or hide the sidebar whole. */
+    /** Tells the shell whether this chat is in Full, where the shell draws nothing of its own. */
     onFull: (full: boolean) => void;
 }
 
-function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, bare, onSide, onFull }: ChatProps): ReactElement {
+function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, onFull }: ChatProps): ReactElement {
     const key = `${agent}#${conversation}`;
     // the loaded window of history, oldest first; null until the first page, since an empty thread and an unread one differ
     const [rows, setRows] = useState<HistoryMessage[] | null>(() => HISTORY_CACHE.get(key)?.rows ?? null);
@@ -1236,7 +1227,7 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, ba
     const listed = listRows?.find((c) => c.id === conversation);
     const headFailed = useRef("");
     const interfaces = useInterfaces(agent, me.connected);
-    const [view, setView] = useState(() => VIEWS.get(agent) ?? { mode: "chat" as ChatMode, app: undefined });
+    const [view, setView] = useState(() => VIEWS.get(agent) ?? { mode: "chat" as ChatMode, app: undefined, from: "web" as const });
     const webApp = interfaces.apps.find((a) => a.appId === view.app) ?? interfaces.apps[0];
     // a remembered Web or Full holds through the first read of the list, so the thread does not flash in first
     const onWeb = !androidApp && view.mode !== "chat" && (webApp !== undefined || (interfaces.loading && interfaces.error === null));
@@ -1251,10 +1242,12 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, ba
     // set by a click on the panel's button, so only that moves the panel: a switch of view shows or hides it in place
     const [toggled, setToggled] = useState(false);
     const onView = useCallback((mode: ChatMode, app: string | undefined): void => {
-        VIEWS.set(agent, { mode, app });
-        setView({ mode, app });
+        // Full keeps the view it was entered from, which Exit and Escape go back to
+        const next = { mode, app, from: mode === "full" && view.mode !== "full" ? view.mode : view.from };
+        VIEWS.set(agent, next);
+        setView(next);
         setToggled(false);
-    }, [agent]);
+    }, [agent, view]);
     const [panelOpen, setPanelOpen] = useState(() => {
         try {
             return localStorage.getItem(`${PANEL_KEY}:${agent}`) === "open";
@@ -1276,12 +1269,25 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, ba
         onFull(full);
         return () => onFull(false);
     }, [full, onFull]);
+    // the page's own strip is gone in Full, so mimi says whose page this is once on the way in, then lets it fade
+    const [note, setNote] = useState(full);
+    const [wasFull, setWasFull] = useState(full);
+    if (full !== wasFull) {
+        setWasFull(full);
+        setNote(full);
+    }
+    useEffect(() => {
+        if (!note) return undefined;
+        const t = setTimeout(() => setNote(false), NOTE_MS);
+        return () => clearTimeout(t);
+    }, [note]);
     // the panel's left edge while it is dragged: written to the screen's style per move, committed to state on release
     const resize = useRef<{ from: number; start: number; width: number } | null>(null);
     const avatar = useAvatar(agent);
     const paneId = useId();
     const pane = useRef<HTMLDivElement | null>(null);
     const launcher = useRef<HTMLButtonElement | null>(null);
+    const exit = useRef<HTMLButtonElement | null>(null);
     const composer = useRef<ComposerHandle | null>(null);
 
     const thread = useRef<HTMLDivElement | null>(null);
@@ -2031,19 +2037,33 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, ba
         if (!pane.current?.contains(document.activeElement)) pane.current?.querySelector<HTMLButtonElement>(".chat-pane-close")?.focus();
     }, [panelOpen, count, agent, toBottom]);
 
+    // Exit, or Escape with the panel closed: back to the view Full was entered from
+    const exitFull = useCallback((): void => {
+        const screen = exit.current?.closest(".chat-screen");
+        flushSync(() => onView(view.from, view.app));
+        // Exit leaves with Full, and the frame too when Full came from Chat: focus goes to the view's own button in the header
+        const at = document.activeElement;
+        if (!at || at === document.body || !at.checkVisibility()) screen?.querySelector<HTMLButtonElement>(".chat-view [aria-pressed=true]")?.focus();
+    }, [onView, view]);
+
     // on document: a field's own Escape (the slash list, a rename) comes first, and the gate's binding on window after it, so Escape never denies here
     useEffect(() => {
         if (!full) return undefined;
+        // one step per Escape: an open panel closes first, then Full is left
+        const step = (): void => {
+            if (panelOpen) togglePanel();
+            else exitFull();
+        };
         const onKey = (e: KeyboardEvent): void => {
-            if (e.key !== "Escape" || e.defaultPrevented || e.isComposing || (!panelOpen && !bare)) return;
+            if (e.key !== "Escape" || e.defaultPrevented || e.isComposing) return;
             if (document.querySelector('dialog[open], [aria-modal="true"], [role="menu"]')) return;
             e.preventDefault();
-            if (panelOpen) togglePanel();
-            else onSide();
+            // a held Escape takes the one step, never the next
+            if (!e.repeat) step();
         };
-        // an Escape inside the interface, forwarded by its bridge: it closes the panel, but never brings the sidebar back over a page in use
+        // an Escape inside the interface, forwarded by its bridge once the page left it unhandled: the same steps
         const onFrameKey = (e: Event): void => {
-            if ((e as CustomEvent<string>).detail === "Escape" && panelOpen) togglePanel();
+            if ((e as CustomEvent<string>).detail === "Escape") step();
         };
         document.addEventListener("keydown", onKey);
         window.addEventListener("mimi:frame-key", onFrameKey);
@@ -2051,7 +2071,7 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, ba
             document.removeEventListener("keydown", onKey);
             window.removeEventListener("mimi:frame-key", onFrameKey);
         };
-    }, [full, panelOpen, bare, onSide, togglePanel]);
+    }, [full, panelOpen, togglePanel, exitFull]);
 
     const setWidth = (width: number): void => {
         const next = Math.min(PANEL_MAX, Math.max(PANEL_MIN, width));
@@ -2102,26 +2122,27 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, ba
                 composer.current?.attach(Array.from(e.dataTransfer.files));
             }}
         >
-            <ChatHead
-                agent={agent}
-                title={title}
-                emptyChat={emptyChat}
-                word={word}
-                tone={tone}
-                elsewhere={elsewhere}
-                renaming={renaming}
-                view={androidApp || (webApp === undefined && !onWeb) ? null : full ? "full" : onWeb ? "web" : "chat"}
-                mode={view.mode}
-                app={webApp?.appId}
-                apps={interfaces.apps}
-                bare={full && bare}
-                onView={onView}
-                onSide={onSide}
-                onRenameStart={onRenameStart}
-                onRename={onRename}
-                onMenu={setMenu}
-                onPick={setPick}
-            />
+            {/* Full is the agent's page alone: no header, only the chat's button and panel and Exit over it */}
+            {!full && (
+                <ChatHead
+                    agent={agent}
+                    title={title}
+                    emptyChat={emptyChat}
+                    word={word}
+                    tone={tone}
+                    elsewhere={elsewhere}
+                    renaming={renaming}
+                    view={androidApp || (webApp === undefined && !onWeb) ? null : onWeb ? "web" : "chat"}
+                    mode={view.mode}
+                    app={webApp?.appId}
+                    apps={interfaces.apps}
+                    onView={onView}
+                    onRenameStart={onRenameStart}
+                    onRename={onRename}
+                    onMenu={setMenu}
+                    onPick={setPick}
+                />
+            )}
             {/* one thread and one dock in every view: Full lifts them into a panel over the interface, so the scroll, the draft and the cards never move */}
             <div className="chat-pane" id={paneId} ref={pane} inert={!chatShown} role={full ? "dialog" : undefined} aria-label={full ? `Chat with ${agent}` : undefined}>
                 {panelShape && (
@@ -2306,6 +2327,23 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, ba
                     <img src={avatar ?? mascot} alt="" draggable={false} data-avatar={avatar ? "" : undefined} />
                     {count > 0 ? <span className="count warn">{count}</span> : unseen && <span className="dot" data-tone="accent" />}
                 </button>
+            )}
+            {full && (
+                // mimi's own corner, drawn over the frame and never in it: the panel hangs below it
+                <div className="chat-corner">
+                    {note && <p className="chat-note" role="note"><Icon name="app" sm />Agent page. mimi never asks for keys or pairing links here.</p>}
+                    <button
+                        ref={exit}
+                        type="button"
+                        className="chat-exit"
+                        aria-label={`Exit Full, back to ${view.from === "chat" ? "Chat" : "Web"}`}
+                        aria-keyshortcuts="Escape"
+                        title={`Back to ${view.from === "chat" ? "Chat" : "Web"} (Escape)`}
+                        onClick={exitFull}
+                    >
+                        Exit<kbd>Esc</kbd>
+                    </button>
+                </div>
             )}
             {webSeen && (
                 <div className="chat-web" hidden={!onWeb}>

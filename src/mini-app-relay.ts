@@ -319,7 +319,7 @@ function onPort(session: Session, data: unknown): void {
         else post(session, { t: "cookies", list: scriptCookies(session.gateway, session.appId) });
         return;
     }
-    // Escape or ⌘B pressed in the frame (Full's chat panel, the sidebar), heard only while the frame holds focus: never a key that answers a gate
+    // Escape or ⌘B pressed in the frame (Full's panel, then Full itself; the sidebar outside Full), heard only while the frame holds focus: never a key that answers a gate
     if (m.t === "key") {
         if (m.key !== "Escape" && m.key !== "b") return bad();
         if (document.activeElement === session.frame.el) window.dispatchEvent(new CustomEvent("mimi:frame-key", { detail: m.key }));

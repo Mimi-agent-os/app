@@ -9,16 +9,16 @@ const css = await readFile(new URL("../src/chat.css", import.meta.url), "utf8");
 test("the switch shows for an agent with an interface, never in the Android app", () => {
     assert.match(source, /const interfaces = useInterfaces\(agent, me\.connected\);/);
     assert.match(source, /const onWeb = !androidApp && view\.mode !== "chat" && /);
-    assert.match(source, /view=\{androidApp \|\| \(webApp === undefined && !onWeb\) \? null : full \? "full" : onWeb \? "web" : "chat"\}/);
+    assert.match(source, /view=\{androidApp \|\| \(webApp === undefined && !onWeb\) \? null : onWeb \? "web" : "chat"\}/);
     assert.match(source, /\{view !== null && \(\s*<div className="seg chat-view" role="group"/);
 });
 
 test("switching is local state remembered per agent, never a route, so it adds no history entry", () => {
-    const onView = /const onView = useCallback\(\(mode: ChatMode, app: string \| undefined\): void => \{([\s\S]*?)\}, \[agent\]\);/.exec(source);
+    const onView = /const onView = useCallback\(\(mode: ChatMode, app: string \| undefined\): void => \{([\s\S]*?)\}, \[agent, view\]\);/.exec(source);
     assert.ok(onView, "one callback switches");
     assert.doesNotMatch(onView[1] as string, /go\(|history\./);
-    assert.match(onView[1] as string, /VIEWS\.set\(agent, \{ mode, app \}\);/);
-    assert.match(source, /useState\(\(\) => VIEWS\.get\(agent\) \?\? \{ mode: "chat" as ChatMode, app: undefined \}\)/);
+    assert.match(onView[1] as string, /VIEWS\.set\(agent, next\);\s*setView\(next\);/);
+    assert.match(source, /useState\(\(\) => VIEWS\.get\(agent\) \?\? \{ mode: "chat" as ChatMode, app: undefined, from: "web" as const \}\)/);
 });
 
 test("the interface is the agent page's own tab, lazily loaded, handed one app so its picker never leaves the chat", () => {

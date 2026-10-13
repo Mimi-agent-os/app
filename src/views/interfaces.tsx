@@ -136,7 +136,7 @@ function AppFrame({ agent, state, active }: { agent: string; state: LaunchState;
         {!loaded && !issue && <p className="dim3" role="status">Loading interface page…</p>}
         {issue && <Err>{issue}</Err>}
         {/* outside the frame, where no agent page can draw over it */}
-        <p className="dim3" style={{ display: "flex", alignItems: "center", gap: 6, margin: 0, font: "var(--f-xs)" }}><Icon name="app" sm />Agent page. mimi never asks for keys or pairing links here.</p>
+        <p className="dim3 interfaces-note"><Icon name="app" sm />Agent page. mimi never asks for keys or pairing links here.</p>
         {/* the frame's origin is the app's own, never the pult's; allow="" drops camera, microphone and the like */}
         <iframe ref={frame} title={state.title} className="interfaces-frame" src={state.url} sandbox="allow-scripts allow-forms allow-same-origin" allow="" referrerPolicy="no-referrer" inert={covered} onLoad={() => { window.clearTimeout(loadingTimer.current); setLoaded(true); setIssue(""); }} onError={() => { window.clearTimeout(loadingTimer.current); setLoaded(false); setIssue("The interface could not be loaded."); }} />
         <div className="interfaces-page-actions">

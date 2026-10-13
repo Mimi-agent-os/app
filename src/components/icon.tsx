@@ -74,13 +74,6 @@ const EXTRA: Partial<Record<IconName, React.ReactElement>> = {
             <path d="M2.4 6.2h11.2" />
         </>
     ),
-    // the window with the sidebar's column drawn in: Full's control that brings the sidebar back
-    side: (
-        <>
-            <rect x="2.4" y="3" width="11.2" height="10" rx="1.6" />
-            <path d="M6.4 3v10" />
-        </>
-    ),
     archive: (
         <>
             <rect x="2.4" y="2.6" width="11.2" height="3" rx="1" />
@@ -99,7 +92,6 @@ export type IconName =
     | "queue"
     | "more"
     | "app"
-    | "side"
     | "archive";
 
 export function Icon({ name, sm }: { name: IconName; sm?: boolean }): React.ReactElement {

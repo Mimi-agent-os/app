@@ -17,6 +17,7 @@
 .interfaces-notice{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2);margin:0;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r1);font:var(--f-sm);color:var(--ink-3)}
 .interfaces-page{display:flex;flex-direction:column;flex:1 0 auto;gap:var(--s2);min-width:0;min-height:320px}
 .interfaces-page[hidden]{display:none}
+.interfaces-note{display:flex;align-items:center;gap:6px;margin:0;font:var(--f-xs)}
 .interfaces-page-actions{display:flex;justify-content:flex-end;flex:none}
 .interfaces-frame{display:block;flex:1;width:100%;min-width:0;min-height:280px;border:1px solid var(--line);border-radius:var(--r2);background:var(--panel)}
 .interfaces-skel{flex:1;width:100%;height:auto;min-height:280px;border-radius:var(--r2)}
