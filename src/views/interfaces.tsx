@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactElement } from "react";
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import type { ReactElement, Ref } from "react";
 
 import type { AgentApp, AppPage, InterfacesData } from "../app-api.ts";
 import { Icon } from "../components/icon.tsx";
+import { Menu } from "../components/menu.tsx";
 import { Btn, Empty, Skeleton } from "../components/ui.tsx";
 import { registerFrame } from "../mini-app-relay.ts";
 import { doorAttached, frameUrl, grantFor } from "../mini-apps.ts";
@@ -20,6 +21,11 @@ interface LaunchState {
     url: string;
     pending: boolean;
     error: string | null;
+}
+
+interface FrameHandle {
+    /** Loads the page again on a fresh grant; unsaved work in it may be lost. */
+    reload: () => void;
 }
 
 function pagesOf(app: AgentApp): AppPage[] {
@@ -43,6 +49,8 @@ export default function InterfacesTab({ agent, initialApp, initialRoute, navigat
     const [selected, setSelected] = useState<Record<string, string>>({});
     const [launched, setLaunched] = useState<Record<string, LaunchState>>({});
     const pending = useRef(new Set<string>());
+    const frame = useRef<FrameHandle | null>(null);
+    const [more, setMore] = useState<HTMLElement | null>(null);
     const mounted = useMounted();
     const app = apps.find((item) => item.appId === initialApp) ?? apps[0];
     const pageIncoming = JSON.stringify([incoming, app?.appId]);
@@ -90,17 +98,29 @@ export default function InterfacesTab({ agent, initialApp, initialRoute, navigat
     const known = Object.keys(launched).length > 0 || !!app;
     // mirrors the auto-launch preconditions, so the placeholder never waits on a launch that will not start
     const awaitingFrame = loading ? !known : door && !!activeKey && approved && !!app?.available && !active?.url && !active?.error && !error;
+    // with a page in view this sits over the page's foot (AppFrame), so the page is never resized by a line that comes and goes
+    const passing = active?.pending && !awaitingFrame ? "Launching interface…" : loading && known ? "Refreshing interfaces…" : null;
 
     return <div className="interfaces-tab">
+        {/* one row: the header above already names the agent */}
         <header className="interfaces-toolbar">
-            <div className="interfaces-heading"><span>@{agent}</span><h2>{app?.title ?? "Interfaces"}</h2></div>
+            <h2 className="interfaces-title">{app?.title ?? "Interfaces"}</h2>
+            {/* outside the frame, where no agent page can draw over it */}
+            {active?.url && <p className="dim3 interfaces-note"><Icon name="app" sm />Agent page. mimi never asks for keys or pairing links here.</p>}
             <div className="interfaces-tools">
                 {apps.length > 1 && <label className="interfaces-app-choice"><span>Interface</span><select aria-label="Choose interface" value={app?.appId} onChange={(event) => go({ at: "agent", agent, tab: "interfaces", app: event.target.value }, { replace: true })}>{apps.map((item) => <option key={item.appId} value={item.appId}>{item.title}</option>)}</select></label>}
                 <Btn sm kind="quiet" icon="refresh" disabled={loading} title="Check for available interfaces without reloading your page" onClick={refresh}>Refresh list</Btn>
+                {active?.url && <Btn sm kind="quiet" icon="refresh" disabled={active.pending} title="Reload this page; unsaved work may be lost" onClick={() => frame.current?.reload()}>Reload interface</Btn>}
+                {/* in a narrow toolbar the two buttons above fold into this one, so the toolbar stays one row (interfaces.css) */}
+                {active?.url && <button type="button" className="btn icon sm interfaces-more" aria-label="Interface actions" aria-haspopup="menu" onClick={(event) => setMore(event.currentTarget)}><Icon name="more" sm /></button>}
             </div>
         </header>
+        {more && <Menu label="Interface actions" at={more} onClose={() => setMore(null)} items={[
+            { id: "refresh", label: "Refresh list", icon: "refresh", disabled: loading, run: refresh },
+            { id: "reload", label: "Reload interface", icon: "refresh", disabled: !active?.url || active.pending, run: () => frame.current?.reload() },
+        ]} />}
         {error && <Err>{error} <Btn sm onClick={refresh}>Retry</Btn></Err>}
-        {loading && known && <p className="dim3" role="status">Refreshing interfaces…</p>}
+        {passing && !active?.url && <p className="dim3" role="status">{passing}</p>}
         {!routeValid && <Err>This interface link has an invalid route. Showing the overview.</Err>}
         {app && (pages.length > 1 || (linkedPage && !pages.some((page) => page.id === linkedPage.id))) && <div className="interfaces-pages" aria-label="Interface pages">
             {[...pages, ...(linkedPage && !pages.some((page) => page.id === linkedPage.id) ? [linkedPage] : [])].map((page) => <button key={page.id} type="button" className={page.id === current?.id ? "on" : ""} aria-pressed={page.id === current?.id} onClick={() => setSelected((old) => ({ ...old, [pageIncoming]: page.id }))}>{page.title}</button>)}
@@ -109,14 +129,13 @@ export default function InterfacesTab({ agent, initialApp, initialRoute, navigat
         {app && !approved && <p className="interfaces-notice" role="status">@{agent} is blocked, so its interfaces cannot be opened.</p>}
         {app && approved && !app.available && <p className="interfaces-notice" role="status">This interface is offline.{active?.url ? " Your open page is still available." : " Check again when it is available."} <Btn sm disabled={loading} onClick={refresh}>Refresh</Btn></p>}
         {active?.error && <Err>{active.error} <Btn sm disabled={active.pending || !app?.available || !approved} onClick={() => { if (app && current) launch(app, current, true); }}>Retry launch</Btn></Err>}
-        {active?.pending && !awaitingFrame && <p className="dim3" role="status">Launching interface…</p>}
         {!loading && !error && !app && <Empty title="No interfaces yet">Interfaces published by {agent} will appear here.</Empty>}
         {awaitingFrame && <div className="interfaces-page" role="status" aria-label="Loading interface"><Skeleton className="interfaces-skel" /></div>}
-        {Object.entries(launched).map(([key, state]) => state.url && <AppFrame key={key} agent={agent} state={state} active={key === activeKey} />)}
+        {Object.entries(launched).map(([key, state]) => state.url && <AppFrame key={key} ref={key === activeKey ? frame : undefined} agent={agent} state={state} active={key === activeKey} passing={passing} />)}
     </div>;
 }
 
-function AppFrame({ agent, state, active }: { agent: string; state: LaunchState; active: boolean }): ReactElement {
+function AppFrame({ agent, state, active, passing, ref }: { agent: string; state: LaunchState; active: boolean; passing: string | null; ref?: Ref<FrameHandle> | undefined }): ReactElement {
     const frame = useRef<HTMLIFrameElement | null>(null);
     const loadingTimer = useRef<number | undefined>(undefined);
     // under a menu, dialog or palette the frame takes no clicks, keys or focus, so it cannot steal them from the pult
@@ -132,21 +151,20 @@ function AppFrame({ agent, state, active }: { agent: string; state: LaunchState;
     }, [agent, state.url, reload]);
     // the relay opens bridge.js's streams, WebSocket and cookies only to a document inside a frame launched for this app
     useEffect(() => (frame.current ? registerFrame(frame.current, state.appId) : undefined), [state.appId]);
+    useImperativeHandle(ref, () => ({
+        reload: () => {
+            setReload((value) => value + 1);
+            // a fresh grant replaces the old one on the gateway: whatever the page had in flight ends with it
+            void grantFor(agent, state.appId, true).then(() => frameUrl(state.appId, state.route)).then((url) => {
+                if (frame.current) frame.current.src = url;
+            }).catch((reason: unknown) => setIssue(errorMessage(reason, "Could not reload this interface.")));
+        },
+    }), [agent, state.appId, state.route]);
+    const line = !loaded && !issue ? "Loading interface page…" : passing;
     return <section hidden={!active} className="interfaces-page" aria-label={state.title}>
-        {!loaded && !issue && <p className="dim3" role="status">Loading interface page…</p>}
         {issue && <Err>{issue}</Err>}
-        {/* outside the frame, where no agent page can draw over it */}
-        <p className="dim3 interfaces-note"><Icon name="app" sm />Agent page. mimi never asks for keys or pairing links here.</p>
         {/* the frame's origin is the app's own, never the pult's; allow="" drops camera, microphone and the like */}
         <iframe ref={frame} title={state.title} className="interfaces-frame" src={state.url} sandbox="allow-scripts allow-forms allow-same-origin" allow="" referrerPolicy="no-referrer" inert={covered} onLoad={() => { window.clearTimeout(loadingTimer.current); setLoaded(true); setIssue(""); }} onError={() => { window.clearTimeout(loadingTimer.current); setLoaded(false); setIssue("The interface could not be loaded."); }} />
-        <div className="interfaces-page-actions">
-            <Btn sm kind="quiet" icon="refresh" disabled={state.pending} title="Reload this page; unsaved work may be lost" onClick={() => {
-                setReload((value) => value + 1);
-                // a fresh grant replaces the old one on the gateway: whatever the page had in flight ends with it
-                void grantFor(agent, state.appId, true).then(() => frameUrl(state.appId, state.route)).then((url) => {
-                    if (frame.current) frame.current.src = url;
-                }).catch((reason: unknown) => setIssue(errorMessage(reason, "Could not reload this interface.")));
-            }}>Reload interface</Btn>
-        </div>
+        {line && <p className="interfaces-status" role="status">{line}</p>}
     </section>;
 }

@@ -14,7 +14,11 @@ test("no frame ever opens on the pult's own origin: the browser door's ticket is
 
 test("the frame is inert under the pult's overlays, and the band that names it as an agent page sits outside it", () => {
     assert.match(source, /<iframe [^>]*inert=\{covered\}/);
-    assert.match(source, /Agent page\. mimi never asks for keys or pairing links here\.<\/p>\n\s*\{\/\*[^*]*\*\/\}\n\s*<iframe /);
+    // on the toolbar row, the pult's own, shown whenever a page is: never inside the frame's section
+    const toolbar = source.slice(source.indexOf('<header className="interfaces-toolbar">'), source.indexOf("</header>"));
+    assert.match(toolbar, /\{active\?\.url && <p className="dim3 interfaces-note"><Icon name="app" sm \/>Agent page\. mimi never asks for keys or pairing links here\.<\/p>\}/);
+    assert.equal(source.split("mimi never asks for keys").length - 1, 1);
+    assert.doesNotMatch(source.slice(source.indexOf("function AppFrame")), /interfaces-note/);
 });
 
 // A pin that is not approved has no launch: the gateway answers 403, and the pult must not ask.

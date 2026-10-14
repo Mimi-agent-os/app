@@ -1,12 +1,19 @@
-/* the agent page's Interfaces tab: a toolbar, then the launched interface filling the rest */
+/* the agent page's Interfaces tab: one toolbar row, then the launched interface filling the rest; the tab scrolls only when mimi's own lines outgrow a very short window */
 
 .interfaces-tab{display:flex;flex:1;flex-direction:column;gap:var(--s3);min-width:0;min-height:0;padding:var(--s4) var(--s5);overflow:auto}
-.interfaces-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--s3);flex:none;min-width:0;padding-bottom:var(--s3);border-bottom:1px solid var(--line)}
-.interfaces-heading{display:grid;gap:2px;flex:1;min-width:0}
-.interfaces-heading>span{font:var(--f-xs);color:var(--ink-3);overflow-wrap:anywhere}
-.interfaces-heading h2{margin:0;font:var(--f-body);font-weight:600;letter-spacing:var(--track-tight);color:var(--ink);overflow-wrap:anywhere}
+.interfaces-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--s3);flex:none;min-width:0;padding-bottom:var(--s3);border-bottom:1px solid var(--line);container-type:inline-size}
+.interfaces-title{flex:0 1 auto;min-width:0;margin:0;font:var(--f-body);font-weight:600;letter-spacing:var(--track-tight);color:var(--ink);overflow-wrap:anywhere}
+/* beside the title while it fits, on a line of its own when it does not: never cut short */
+.interfaces-note{display:flex;align-items:center;flex:1 1 240px;gap:6px;min-width:0;margin:0;font:var(--f-xs)}
 .interfaces-tools{display:flex;align-items:flex-end;justify-content:flex-end;flex-wrap:wrap;gap:10px;min-width:0;max-width:100%}
 .interfaces-tools>.btn{flex:none}
+.interfaces-tools>.interfaces-more{display:none}
+/* where Refresh and Reload would wrap under the title, they fold into ⋯ and the note wraps beside the title instead: still one row */
+@container (max-width:599px){
+  .interfaces-note{flex-basis:160px}
+  .interfaces-tools:has(>.interfaces-more)>.btn:not(.interfaces-more){display:none}
+  .interfaces-tools>.interfaces-more{display:inline-flex}
+}
 .interfaces-app-choice{display:grid;gap:4px;min-width:0;font:var(--f-xs);color:var(--ink-3)}
 .interfaces-app-choice select{max-width:230px;min-width:0;height:var(--ctl-h-sm);font:var(--f-sm)}
 /* page switcher: the segmented control's shape, but it scrolls sideways when an interface has many pages */
@@ -15,18 +22,18 @@
 @media (hover:hover){.interfaces-pages>button:hover{color:var(--ink-2)}}
 .interfaces-pages>button.on{background:var(--panel);color:var(--ink)}
 .interfaces-notice{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2);margin:0;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r1);font:var(--f-sm);color:var(--ink-3)}
-.interfaces-page{display:flex;flex-direction:column;flex:1 0 auto;gap:var(--s2);min-width:0;min-height:320px}
+/* the page takes what the toolbar leaves, down to a floor that still fits the shortest window Tauri allows (480px) */
+.interfaces-page{position:relative;display:flex;flex-direction:column;flex:1 1 0;gap:var(--s2);min-width:0;min-height:160px}
 .interfaces-page[hidden]{display:none}
-.interfaces-note{display:flex;align-items:center;gap:6px;margin:0;font:var(--f-xs)}
-.interfaces-page-actions{display:flex;justify-content:flex-end;flex:none}
-.interfaces-frame{display:block;flex:1;width:100%;min-width:0;min-height:280px;border:1px solid var(--line);border-radius:var(--r2);background:var(--panel)}
-.interfaces-skel{flex:1;width:100%;height:auto;min-height:280px;border-radius:var(--r2)}
+.interfaces-frame{display:block;flex:1 1 0;width:100%;min-width:0;min-height:0;border:1px solid var(--line);border-radius:var(--r2);background:var(--panel)}
+.interfaces-skel{flex:1 1 0;width:100%;height:auto;min-height:0;border-radius:var(--r2)}
+/* loading, refreshing: over the page's foot, never above it, so the page is laid out once at its final size; clicks go through */
+.interfaces-status{position:absolute;left:var(--s3);bottom:var(--s3);z-index:1;max-width:calc(100% - var(--s3) * 2);margin:0;padding:4px 10px;border:1px solid var(--line);border-radius:var(--pill);background:var(--panel-2);color:var(--ink-3);font:var(--f-xs);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none}
 
 @media (max-width:900px){
   .interfaces-tab{gap:10px;padding:var(--s3) var(--s4)}
   .interfaces-toolbar{gap:10px;padding-bottom:10px}
   .interfaces-tools{gap:6px}
   .interfaces-app-choice select{max-width:min(230px,calc(100vw - 52px))}
-  .interfaces-frame,.interfaces-skel{min-height:240px}
 }
 @media (pointer:coarse){.interfaces-app-choice select{font-size:17px}}

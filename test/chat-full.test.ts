@@ -30,14 +30,31 @@ test("Full draws no header: the chat's own header is not rendered there, and not
     assert.match(source, /useLayoutEffect\(\(\) => \{\s*onFull\(full\);\s*return \(\) => onFull\(false\);\s*\}, \[full, onFull\]\);/);
 });
 
-test("Full draws no strip: the tab's toolbar, the page switcher, the agent-page line and Reload are Web's, and the page goes edge to edge", () => {
-    assert.match(fullCss, /\.chat-screen\[data-view=full\] :is\(\.interfaces-toolbar,\.interfaces-pages,\.interfaces-note,\.interfaces-page-actions\)\{display:none\}/);
+test("Full draws no strip: the tab's toolbar, with the agent-page line and Reload on it, and the page switcher are Web's, and the page goes edge to edge", () => {
+    assert.match(fullCss, /\.chat-screen\[data-view=full\] :is\(\.interfaces-toolbar,\.interfaces-pages\)\{display:none\}/);
+    const toolbar = tab.slice(tab.indexOf('<header className="interfaces-toolbar">'), tab.indexOf("</header>"));
     // a class, never an inline style, or no stylesheet could hide it
-    assert.match(tab, /<p className="dim3 interfaces-note"><Icon name="app" sm \/>Agent page\./);
+    assert.match(toolbar, /<p className="dim3 interfaces-note"><Icon name="app" sm \/>Agent page\./);
+    assert.match(toolbar, />Reload interface<\/Btn>/);
     assert.match(fullCss, /\.chat-screen\[data-view=full\] \.interfaces-tab\{gap:0;padding:0\}/);
-    assert.match(fullCss, /\.chat-screen\[data-view=full\] :is\(\.interfaces-frame,\.interfaces-skel\)\{min-height:0;border:0;border-radius:0\}/);
-    // what mimi says about the page (loading, offline, an error) stays, clear of Exit
-    assert.match(fullCss, /\.interfaces-page>:is\(\[role=status\],\.err\)\)\{align-self:flex-start;max-width:calc\(100% - 128px\);/);
+    assert.match(fullCss, /\.chat-screen\[data-view=full\] :is\(\.interfaces-frame,\.interfaces-skel\)\{border:0;border-radius:0\}/);
+    // what mimi says about the page for longer (offline, an error) stays above it, clear of Exit; the passing lines float over its foot
+    assert.match(fullCss, /\.interfaces-page>\.err\)\{align-self:flex-start;max-width:calc\(100% - 128px\);/);
+});
+
+test("open in Full, the panel is docked: the page gives up its width and reflows, never sits under it", () => {
+    const dock = /\.chat-screen\[data-view=full\]\[data-open\]>\.chat-web\{margin-right:calc\(var\(--pane-w\) \+ var\(--s3\) \* 2\)\}/;
+    assert.match(fullCss, dock);
+    // the panel's own width and its margins: the page ends one gap left of the panel's border
+    assert.match(fullCss, /\.chat-screen\[data-panel\]>\.chat-pane\{[^}]*width:min\(var\(--pane-w\),calc\(100% - var\(--s4\)\)\);margin:[^;]* var\(--s3\) var\(--s3\);/);
+    // one reflow each way: the page's width is never transitioned, only the panel's fade and slide
+    assert.doesNotMatch(css, /\.chat-web[^{]*\{[^}]*transition/);
+    const motion = css.slice(css.indexOf("@media (prefers-reduced-motion:no-preference)"));
+    assert.doesNotMatch(motion, /margin|width/);
+    // live while the edge is dragged: the drag writes --pane-w on the screen, which the margin reads
+    assert.match(source, /e\.currentTarget\.closest<HTMLElement>\("\.chat-screen"\)\?\.style\.setProperty\("--pane-w", `\$\{drag\.width\}px`\);/);
+    assert.match(source, /data-open=\{full && panelOpen \? "" : undefined\}/);
+    assert.match(source, /style=\{\{ "--pane-w": `\$\{panelWidth\}px` \} as CSSProperties\}/);
 });
 
 test("the frame is mounted once and only hidden: no view and no panel state takes it down", () => {

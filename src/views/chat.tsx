@@ -1143,7 +1143,7 @@ type ChatMode = "chat" | "web" | "full";
 // the Chat, Web or Full choice, the interface picked and the view Full was entered from, per agent, for as long as the app runs
 const VIEWS = new Map<string, { mode: ChatMode; app: string | undefined; from: "chat" | "web" }>();
 
-// Full: the interface fills the window and the chat is a panel over it, from this width; narrower, Full shows as Web
+// Full: the interface fills the window and the chat is a panel docked beside it, from this width; narrower, Full shows as Web
 const roomyQuery = matchMedia("(min-width: 1100px)");
 const onRoomyChange = (listener: () => void): (() => void) => {
     roomyQuery.addEventListener("change", listener);
@@ -2122,7 +2122,7 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
                 composer.current?.attach(Array.from(e.dataTransfer.files));
             }}
         >
-            {/* Full is the agent's page alone: no header, only the chat's button and panel and Exit over it */}
+            {/* Full is the agent's page alone: no header, only the chat's button or its docked panel, and Exit */}
             {!full && (
                 <ChatHead
                     agent={agent}
@@ -2143,7 +2143,7 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
                     onPick={setPick}
                 />
             )}
-            {/* one thread and one dock in every view: Full lifts them into a panel over the interface, so the scroll, the draft and the cards never move */}
+            {/* one thread and one dock in every view: Full lifts them into a panel beside the interface, so the scroll, the draft and the cards never move */}
             <div className="chat-pane" id={paneId} ref={pane} inert={!chatShown} role={full ? "dialog" : undefined} aria-label={full ? `Chat with ${agent}` : undefined}>
                 {panelShape && (
                     <header className="chat-pane-head">

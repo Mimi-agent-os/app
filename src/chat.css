@@ -16,9 +16,11 @@
 .chat-view button{padding:0 8px}
 @media (max-width:1099px){.chat-view .chat-view-full{display:none}}
 
-/* Full: the agent's page is the whole window, with no header; the chat is a panel hung from the right edge over it, under Exit, and the page never reflows; Web keeps its shape (data-panel) so the hidden thread stays put */
+/* Full: the agent's page is the whole window, with no header; the chat is a panel docked at the right edge under Exit; Web keeps its shape (data-panel) so the hidden thread stays put */
 .chat-screen[data-panel]>.chat-pane{z-index:2;justify-self:end;width:min(var(--pane-w),calc(100% - var(--s4)));margin:calc(var(--s3) + var(--ctl-h) + var(--s2)) var(--s3) var(--s3);border:1px solid var(--line-2);border-radius:var(--r2);background:var(--panel)}
 .chat-screen[data-view=full]:not([data-open])>.chat-pane{visibility:hidden;opacity:0;translate:var(--s3) 0}
+/* open, the page gives up the panel's width and its two gaps, so nothing of it is hidden: one reflow on open and one on close (never animated), live while the edge is dragged */
+.chat-screen[data-view=full][data-open]>.chat-web{margin-right:calc(var(--pane-w) + var(--s3) * 2)}
 .chat-pane-head{flex:none;display:flex;align-items:center;gap:var(--s2);min-width:0;height:44px;padding:0 var(--s1) 0 var(--s3);border-bottom:1px solid var(--line)}
 .chat-pane-head>b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--f-md);font-weight:600}
 .chat-pane-head>.chat-pane-close{margin-left:auto}
@@ -48,12 +50,12 @@
 .chat-exit{display:inline-flex;align-items:center;gap:6px;height:var(--ctl-h);padding:0 6px 0 12px;border:1px solid var(--line-2);border-radius:var(--pill);background:var(--panel-2);color:var(--ink-2);font:var(--f-sm);font-weight:500;cursor:pointer;pointer-events:auto}
 @media (hover:hover){.chat-exit:hover{border-color:var(--ink-3);background:var(--panel-3);color:var(--ink)}}
 .chat-note{display:flex;align-items:center;gap:6px;height:var(--ctl-h);margin:0;padding:0 12px;border:1px solid var(--line);border-radius:var(--pill);background:var(--panel-2);color:var(--ink-3);font:var(--f-xs);white-space:nowrap}
-/* the page edge to edge: the tab's toolbar, the page switcher, the page's strip and Reload are Web's; mimi's own lines (loading, offline, an error) stay above the page, clear of Exit */
+/* the page edge to edge: the tab's toolbar (the agent-page line and Reload with it) and the page switcher are Web's; mimi's own lasting lines (offline, an error) stay above the page, clear of Exit */
 .chat-screen[data-view=full] .interfaces-tab{gap:0;padding:0}
-.chat-screen[data-view=full] :is(.interfaces-toolbar,.interfaces-pages,.interfaces-note,.interfaces-page-actions){display:none}
-.chat-screen[data-view=full] :is(.interfaces-tab>:not(.interfaces-page),.interfaces-page>:is([role=status],.err)){align-self:flex-start;max-width:calc(100% - 128px);margin:var(--s3) 0 0 var(--s4)}
-.chat-screen[data-view=full] .interfaces-page{gap:0;min-height:0;flex:1 1 0}
-.chat-screen[data-view=full] :is(.interfaces-frame,.interfaces-skel){min-height:0;border:0;border-radius:0}
+.chat-screen[data-view=full] :is(.interfaces-toolbar,.interfaces-pages){display:none}
+.chat-screen[data-view=full] :is(.interfaces-tab>:not(.interfaces-page),.interfaces-page>.err){align-self:flex-start;max-width:calc(100% - 128px);margin:var(--s3) 0 0 var(--s4)}
+.chat-screen[data-view=full] .interfaces-page{gap:0;min-height:0}
+.chat-screen[data-view=full] :is(.interfaces-frame,.interfaces-skel){border:0;border-radius:0}
 .head .chat-web-pick{width:auto;max-width:180px;height:var(--ctl-h-sm);padding:0 6px;font:var(--f-sm);text-overflow:ellipsis}
 
 /* header */
