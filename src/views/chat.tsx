@@ -1138,6 +1138,8 @@ const PANEL_KEY = "mimi-os:chat-panel";
 const PANEL_W_KEY = "mimi-os:chat-panel-w";
 const PANEL_MIN = 320;
 const PANEL_MAX = 640;
+// and at most this share of the window, as chat.css shows it
+const PANEL_SHARE = 0.4;
 // how long the line saying whose page this is stays on entering Full; chat.css fades it out just before
 const NOTE_MS = 4000;
 
@@ -2096,7 +2098,7 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash }: 
     }, [full, panelOpen, togglePanel, exitFull]);
 
     const setWidth = (width: number): void => {
-        const next = Math.min(PANEL_MAX, Math.max(PANEL_MIN, width));
+        const next = Math.max(PANEL_MIN, Math.min(PANEL_MAX, Math.round(window.innerWidth * PANEL_SHARE), width));
         setPanelWidth(next);
         try {
             localStorage.setItem(PANEL_W_KEY, String(next));
@@ -2319,7 +2321,7 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash }: 
                         onPointerMove={(e) => {
                             const drag = resize.current;
                             if (!drag) return;
-                            drag.width = Math.min(PANEL_MAX, Math.max(PANEL_MIN, Math.round(drag.start + drag.from - e.clientX)));
+                            drag.width = Math.max(PANEL_MIN, Math.min(PANEL_MAX, Math.round(window.innerWidth * PANEL_SHARE), Math.round(drag.start + drag.from - e.clientX)));
                             e.currentTarget.closest<HTMLElement>(".chat-screen")?.style.setProperty("--pane-w", `${drag.width}px`);
                         }}
                         onLostPointerCapture={(e) => {

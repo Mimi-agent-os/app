@@ -66,10 +66,10 @@ test("Full draws no strip: the tab's toolbar, with the agent-page line and Reloa
 });
 
 test("open in Full, the panel is docked: the page gives up its width and reflows, never sits under it", () => {
-    const dock = /\.chat-screen\[data-view=full\]\[data-open\]>\.chat-web\{margin-right:calc\(var\(--pane-w\) \+ var\(--s3\) \* 2\)\}/;
+    const dock = /\.chat-screen\[data-view=full\]\[data-open\]>\.chat-web\{margin-right:calc\(var\(--pane-shown\) \+ var\(--s3\) \* 2\)\}/;
     assert.match(fullCss, dock);
     // the panel's own width and its margins: the page ends one gap left of the panel's border
-    assert.match(fullCss, /\.chat-screen\[data-panel\]>\.chat-pane\{[^}]*width:min\(var\(--pane-w\),calc\(100% - var\(--s4\)\)\);margin:[^;]* var\(--s3\) var\(--s3\);/);
+    assert.match(fullCss, /\.chat-screen\[data-panel\]>\.chat-pane\{[^}]*width:min\(var\(--pane-shown\),calc\(100% - var\(--s4\)\)\);margin:[^;]* var\(--s3\) var\(--s3\);/);
     // one reflow each way: the page's width is never transitioned, only the panel's fade and slide
     assert.doesNotMatch(css, /\.chat-web[^{]*\{[^}]*transition/);
     const motion = css.slice(css.indexOf("@media (prefers-reduced-motion:no-preference)"));
@@ -144,15 +144,17 @@ test("the agent-page note shows once on entering Full, drawn by mimi, then fades
 test("the panel is the chat's own thread and dock, never a copy: one pane in every view", () => {
     assert.equal(source.split('className="thread" ref={thread}').length - 1, 1);
     assert.equal(source.split("<Composer\n").length - 1, 1);
-    assert.match(css, /\.chat-screen\[data-panel\]>\.chat-pane\{z-index:2;justify-self:end;width:min\(var\(--pane-w\),calc\(100% - var\(--s4\)\)\);/);
+    assert.match(css, /\.chat-screen\[data-panel\]>\.chat-pane\{z-index:2;justify-self:end;width:min\(var\(--pane-shown\),calc\(100% - var\(--s4\)\)\);/);
+    // the panel shows at most 40% of the window, and a drag stops there too
+    assert.match(css, /\.chat-screen\{--pane-shown:min\(var\(--pane-w\),max\(320px,40vw\)\);/);
     // Web keeps the shape the thread was last seen in, so a trip through Web never reflows it out of its place
     assert.match(source, /if \(!onWeb && panelShape\) setPanelShape\(false\);\s*if \(full && !panelShape\) setPanelShape\(true\);/);
 });
 
 test("the panel hangs from the right edge: its left edge dragged left, or ArrowLeft, makes it wider", () => {
-    assert.match(source, /drag\.width = Math\.min\(PANEL_MAX, Math\.max\(PANEL_MIN, Math\.round\(drag\.start \+ drag\.from - e\.clientX\)\)\);/);
+    assert.match(source, /drag\.width = Math\.max\(PANEL_MIN, Math\.min\(PANEL_MAX, Math\.round\(window\.innerWidth \* PANEL_SHARE\), Math\.round\(drag\.start \+ drag\.from - e\.clientX\)\)\);/);
     assert.match(source, /setWidth\(panelWidth \+ \(e\.key === "ArrowLeft" \? step : -step\)\);/);
-    assert.match(source, /const PANEL_MIN = 320;\s*const PANEL_MAX = 640;/);
+    assert.match(source, /const PANEL_MIN = 320;\s*const PANEL_MAX = 640;[^]*?const PANEL_SHARE = 0\.4;/);
     assert.match(source, /return Math\.min\(PANEL_MAX, Math\.max\(PANEL_MIN, stored \|\| 420\)\);/);
     assert.match(source, /role="separator"\s*aria-orientation="vertical"/);
     assert.match(css, /\.chat-screen\[data-view=full\]:not\(\[data-open\]\)>\.chat-pane\{visibility:hidden\}/);

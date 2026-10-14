@@ -1,6 +1,7 @@
 /* ── the chat screen: header, thread, dock ── */
 
-.chat-screen{position:relative;display:grid;grid-template-rows:auto minmax(0,1fr);height:100%;min-height:0;min-width:0}
+/* an open panel takes at most 40% of the window, so the page beside it keeps the rest */
+.chat-screen{--pane-shown:min(var(--pane-w),max(320px,40vw));position:relative;display:grid;grid-template-rows:auto minmax(0,1fr);height:100%;min-height:0;min-width:0}
 /* files dragged over a chat: one quiet layer over the whole screen that never catches the drag itself */
 .drop-veil{position:absolute;inset:var(--s2);z-index:5;display:grid;place-items:center;border:1px dashed var(--line-2);border-radius:var(--r2);background:color-mix(in oklab,var(--panel) 90%,transparent);pointer-events:none}
 .drop-veil span{font:var(--f-md);font-weight:500;color:var(--ink-2)}
@@ -19,10 +20,10 @@
 @media (max-width:1099px){.chat-view .chat-view-full{display:none}}
 
 /* Full: the agent's page is the whole window, with no header; the chat is a panel docked at the right edge under Exit; Web keeps its shape (data-panel) so the hidden thread stays put */
-.chat-screen[data-panel]>.chat-pane{z-index:2;justify-self:end;width:min(var(--pane-w),calc(100% - var(--s4)));margin:calc(var(--s3) + var(--ctl-h) + var(--s2)) var(--s3) var(--s3);border:1px solid var(--line-2);border-radius:var(--r2);background:var(--panel)}
+.chat-screen[data-panel]>.chat-pane{z-index:2;justify-self:end;width:min(var(--pane-shown),calc(100% - var(--s4)));margin:calc(var(--s3) + var(--ctl-h) + var(--s2)) var(--s3) var(--s3);border:1px solid var(--line-2);border-radius:var(--r2);background:var(--panel)}
 .chat-screen[data-view=full]:not([data-open])>.chat-pane{visibility:hidden}
 /* open, the page gives up the panel's width and its two gaps, so nothing of it is hidden: one reflow on open and one on close (never animated), live while the edge is dragged */
-.chat-screen[data-view=full][data-open]>.chat-web{margin-right:calc(var(--pane-w) + var(--s3) * 2)}
+.chat-screen[data-view=full][data-open]>.chat-web{margin-right:calc(var(--pane-shown) + var(--s3) * 2)}
 .chat-pane-head{flex:none;display:flex;align-items:center;gap:var(--s2);min-width:0;height:44px;padding:0 var(--s1) 0 var(--s3);border-bottom:1px solid var(--line)}
 .chat-pane-head>b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--f-md);font-weight:600}
 .chat-pane-head>.chat-pane-close{margin-left:auto}
