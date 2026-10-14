@@ -13,12 +13,14 @@
 .chat-web{grid-area:2/1;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--panel)}
 .chat-web[hidden]{display:none}
 .chat-screen[data-view=web]>.chat-pane{visibility:hidden}
+/* a switch holds the page at its old size for a frame (holdFrame in chat.tsx): what then does not fit is cut, never scrolled to */
+.chat-web .interfaces-page{overflow:clip}
 .chat-view button{padding:0 8px}
 @media (max-width:1099px){.chat-view .chat-view-full{display:none}}
 
 /* Full: the agent's page is the whole window, with no header; the chat is a panel docked at the right edge under Exit; Web keeps its shape (data-panel) so the hidden thread stays put */
 .chat-screen[data-panel]>.chat-pane{z-index:2;justify-self:end;width:min(var(--pane-w),calc(100% - var(--s4)));margin:calc(var(--s3) + var(--ctl-h) + var(--s2)) var(--s3) var(--s3);border:1px solid var(--line-2);border-radius:var(--r2);background:var(--panel)}
-.chat-screen[data-view=full]:not([data-open])>.chat-pane{visibility:hidden;opacity:0;translate:var(--s3) 0}
+.chat-screen[data-view=full]:not([data-open])>.chat-pane{visibility:hidden}
 /* open, the page gives up the panel's width and its two gaps, so nothing of it is hidden: one reflow on open and one on close (never animated), live while the edge is dragged */
 .chat-screen[data-view=full][data-open]>.chat-web{margin-right:calc(var(--pane-w) + var(--s3) * 2)}
 .chat-pane-head{flex:none;display:flex;align-items:center;gap:var(--s2);min-width:0;height:44px;padding:0 var(--s1) 0 var(--s3);border-bottom:1px solid var(--line)}
@@ -132,6 +134,9 @@
 .chat-image img{display:block;width:100%;height:100%;object-fit:contain;opacity:0}
 .chat-image.ok{cursor:zoom-in}
 .chat-image.ok img{opacity:1}
+/* past four, small square tiles: 32 images stay a few rows */
+.chat-images.many .chat-image{width:64px;height:64px}
+.chat-images.many .chat-image img{object-fit:cover}
 
 .dlgback.image-viewer{grid-template-rows:auto minmax(0,1fr);grid-template-columns:minmax(0,1fr);gap:var(--s2);padding:max(var(--s4),var(--in-t)) max(var(--s4),var(--in-r)) max(var(--s4),var(--in-b)) max(var(--s4),var(--in-l));cursor:zoom-out}
 .image-viewer>img{max-width:100%;max-height:100%;background:var(--panel)}
@@ -273,6 +278,8 @@
 .queue-n{width:14px;flex:none;font:var(--f-xs);font-family:var(--mono);line-height:26px;color:var(--ink-3)}
 .queue-item{flex:1;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);gap:4px}
 .queue-pastes{display:flex;flex-wrap:wrap;gap:4px}
+.queue-images{display:flex;align-items:center;gap:4px;font:var(--f-xs);color:var(--ink-3)}
+.queue-images img{width:26px;height:26px;object-fit:cover;border:1px solid var(--line);border-radius:var(--r0)}
 .queue-paste{max-width:100%;height:22px;padding:0 8px;border:1px solid var(--line);border-radius:var(--r0);background:var(--panel-2);font:var(--f-xs);color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
 @media (hover:hover){.queue-paste:hover{border-color:var(--line-2);color:var(--ink)}}
 .queue-text{display:block;width:100%;min-height:26px;resize:vertical;padding:3px 8px;border:1px solid var(--line);border-radius:var(--r1);background:var(--panel-2);color:var(--ink);font:var(--f-body)}
@@ -288,7 +295,7 @@
 .composer-bar{display:flex;align-items:center;justify-content:flex-end;gap:var(--s2);min-width:0}
 .composer-hint{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--f-xs);color:var(--ink-3)}
 @media (pointer:coarse){
-  .composer-bar>.btn.quiet:first-child{margin-right:auto}
+  .composer-bar>.btn.quiet:first-child:not(:has(+.count)),.composer-bar>.count{margin-right:auto}
   .msg-actions .btn,.msg-foot .btn{height:var(--ctl-h-sm)}
   /* its ⌘⏎ is hidden on touch, and "Allow" alone would read as a third button */
   .gate .hint{display:none}
@@ -302,7 +309,8 @@
 .slash-opt .i{color:var(--ink-3)}
 .slash-opt[aria-selected=true]{background:var(--sel);color:var(--ink)}
 .slash-opt kbd{margin-left:auto}
-.composer-thumbs{display:flex;flex-wrap:wrap;gap:var(--s2)}
+/* one row that scrolls sideways, so 32 images never grow the box */
+.composer-thumbs{display:flex;gap:var(--s2);overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin}
 .composer-thumb{position:relative;width:56px;height:56px;flex:none;overflow:hidden;border:1px solid var(--line);border-radius:var(--r1);background:var(--panel)}
 .composer-thumb img{display:block;width:100%;height:100%;object-fit:cover}
 .composer-thumb button{position:absolute;top:2px;right:2px;display:grid;place-items:center;width:18px;height:18px;padding:0;border:0;border-radius:var(--r0);background:color-mix(in oklab,var(--bg) 70%,transparent);color:var(--ink);cursor:pointer}
@@ -344,14 +352,11 @@
 /* the phone scale sets message text at 15px; a text field stays at 16px, or iOS zooms on focus */
 @media (pointer:coarse){.composer textarea,.msg-edit textarea,.queue-text{font-size:17px}}
 
-/* motion: only your sent message rises in; history and streamed text never animate; Full's panel eases in and out only when its button or Escape moves it */
+/* motion: only your sent message rises in; history and streamed text never animate; Full's controls and panel come and go at once, as a busy page resized right after would swallow any fade */
 @media (prefers-reduced-motion:no-preference){
   .msg.is-sent{animation:rise-in var(--dur-2) var(--ease-out) both}
-  .chat-screen[data-toggled]>.chat-pane{transition:opacity var(--dur-2) var(--ease-out),translate var(--dur-2) var(--ease-out),visibility 0s}
-  .chat-screen[data-toggled]:not([data-open])>.chat-pane{transition:opacity var(--dur-1) var(--ease-in),translate var(--dur-1) var(--ease-in),visibility 0s var(--dur-1)}
-  .chat-launch,.chat-exit{animation:fade-in var(--dur-2) var(--ease-out) both}
-  /* in, then out just before NOTE_MS (chat.tsx) takes it away */
-  .chat-note{animation:fade-in var(--dur-2) var(--ease-out) both,fade-out var(--dur-3) var(--ease-in) 3.7s forwards}
+  /* out just before NOTE_MS (chat.tsx) takes it away */
+  .chat-note{animation:fade-out var(--dur-3) var(--ease-in) 3.7s forwards}
   .chat-typing{animation:fade-in var(--dur-2) var(--ease-out) 300ms both}
   .chat-typing>i{animation:pulse 1.2s ease-in-out infinite}
   .chat-typing>i:nth-child(2){animation-delay:150ms}

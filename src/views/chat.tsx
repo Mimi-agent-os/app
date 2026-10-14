@@ -17,7 +17,7 @@ import {
 import type { CSSProperties, DragEvent, ReactElement, SyntheticEvent } from "react";
 import { createPortal, flushSync } from "react-dom";
 
-import { buildPasted, parsePasted, type OwnerAnswer, type OwnerQuestion, type Paste } from "@mimi-os/protocol";
+import { buildPasted, IMAGE_TOKENS, MAX_IMAGES, parsePasted, type OwnerAnswer, type OwnerQuestion, type Paste } from "@mimi-os/protocol";
 
 import {
     getLlmCallRaw,
@@ -47,6 +47,7 @@ import type { ApprovalResolvedEvent, ChatChangedDetail } from "../events.ts";
 import { useChatActions } from "../components/chat-row.tsx";
 import { useDialog } from "../components/dialog.tsx";
 import { Icon } from "../components/icon.tsx";
+import { ImageGrid, QueuedImages } from "../components/image-grid.tsx";
 import { CopyTextButton, Markdown } from "../components/markdown.tsx";
 import { Menu } from "../components/menu.tsx";
 import { ConnLine } from "../components/nav-bar.tsx";
@@ -55,6 +56,7 @@ import { BoxCards, PasteCard, PasteViewer } from "../components/paste-card.tsx";
 import { QuestionCard, type AskOutcome } from "../components/question-card.tsx";
 import { useToast } from "../components/toast.tsx";
 import { AgentMark, BackButton, Btn, Disclose, Empty, LoadBoundary } from "../components/ui.tsx";
+import { imagesKey, seedImages } from "../message-images.ts";
 import { isLongPaste, newPaste, tooLarge } from "../pasted.ts";
 import { go, here, holdBack, releaseBack } from "../route.ts";
 import { clock, countdown, errorMessage, Err, isDelegation, kilo, plural, SOFT_KEYS, useDevDetails, when } from "../shared.ts";
@@ -159,7 +161,8 @@ interface Said {
     kind: "msg";
     id: number;
     text: string;
-    images?: string[] | undefined;
+    /** A live message's data-URIs, or the count a stored row carries. */
+    images?: string[] | number | undefined;
     actor?: NonNullable<HistoryMessage["meta"]>["actor"];
     at?: string | undefined;
 }
@@ -346,24 +349,6 @@ function rebuild(rows: readonly HistoryMessage[]): Item[] {
 
 // ── thread pieces ────────────────────────────────────────────────────────────
 
-// the ref covers cache hits, where the load event may fire before onLoad is attached
-function ChatImage({ src, label, onOpen }: { src: string; label: string; onOpen: (from: HTMLButtonElement) => void }): ReactElement {
-    const [state, setState] = useState<"wait" | "ok" | "bad">("wait");
-    if (state === "bad") return <span className="chat-image bad" title="Image unavailable"><Icon name="image" /></span>;
-    return (
-        <button type="button" className={`chat-image ${state}`} aria-label={label} disabled={state === "wait"} onClick={(e) => onOpen(e.currentTarget)}>
-            <img
-                src={src}
-                alt=""
-                loading="lazy"
-                ref={(el) => { if (el?.complete) setState(el.naturalWidth > 0 ? "ok" : "bad"); }}
-                onLoad={() => setState("ok")}
-                onError={() => setState("bad")}
-            />
-        </button>
-    );
-}
-
 function ImageViewer({ images, start, from, onClose }: {
     images: readonly string[];
     start: number;
@@ -445,13 +430,15 @@ type Speaker = "human" | "agent" | "system" | "unknown";
 
 type OnOpenPaste = (paste: Paste, from: HTMLButtonElement) => void;
 
-const Bubble = memo(function Bubble({ speaker, who, text, md, images, at, head = true, sent, editId, onEdit, onImage, onOpenPaste }: {
+const Bubble = memo(function Bubble({ speaker, who, text, md, images, imagesAt, at, head = true, sent, editId, onEdit, onImage, onOpenPaste }: {
     speaker: Speaker;
     who: string;
     text: string;
     /** Agent text only: your own asterisks come back verbatim. */
     md?: boolean | undefined;
-    images?: string[] | undefined;
+    images?: string[] | number | undefined;
+    /** A stored row's key in message-images.ts, where its counted images are fetched from. */
+    imagesAt?: string | undefined;
     at?: string | undefined;
     /** Only a turn's first reply carries the name line. */
     head?: boolean | undefined;
@@ -477,18 +464,7 @@ const Bubble = memo(function Bubble({ speaker, who, text, md, images, at, head =
                 </header>
             )}
             <div className="msg-body">
-                {images && images.length > 0 && (
-                    <div className="chat-images">
-                        {images.map((src, i) => (
-                            <ChatImage
-                                key={i}
-                                src={src}
-                                label={images.length > 1 ? `Open image ${i + 1} of ${images.length}` : "Open image"}
-                                onOpen={(from) => onImage?.(images, i, from)}
-                            />
-                        ))}
-                    </div>
-                )}
+                {images !== undefined && <ImageGrid images={images} at={imagesAt} onImage={onImage} />}
                 {pastes.length > 0 && (
                     <div className="paste-cards">
                         {pastes.map((p, i) => <PasteCard key={i} paste={p} preview={2} onOpen={(paste, from) => onOpenPaste?.(paste, from)} />)}
@@ -811,8 +787,9 @@ const TurnBlock = memo(function TurnBlock({ agent, turn, now, onToggle, onAnswer
 });
 
 /** The history window, memoized apart from the live turn so a stream chunk never re-renders it. */
-const PastThread = memo(function PastThread({ agent, items, editing, canEdit, onEdit, onEditSave, onEditCancel, onImage, onOpenPaste }: {
+const PastThread = memo(function PastThread({ agent, conversation, items, editing, canEdit, onEdit, onEditSave, onEditCancel, onImage, onOpenPaste }: {
     agent: string;
+    conversation: number;
     items: readonly Item[];
     editing: number | null;
     canEdit: boolean;
@@ -849,6 +826,7 @@ const PastThread = memo(function PastThread({ agent, items, editing, canEdit, on
                         md={speaker === "agent"}
                         text={it.text}
                         images={it.images}
+                        imagesAt={imagesKey(agent, conversation, it.id)}
                         at={it.at}
                         editId={it.id}
                         // only while nothing runs (truncating under a live turn would delete rows it is still writing), and only words can be edited
@@ -1053,7 +1031,7 @@ const ChatHead = memo(function ChatHead({
                             const screen = e.currentTarget.closest(".chat-screen");
                             // this header leaves with Full: focus goes to Exit, the one control drawn in its place
                             flushSync(() => onView("full", app));
-                            screen?.querySelector<HTMLButtonElement>(".chat-exit")?.focus();
+                            screen?.querySelector<HTMLButtonElement>(".chat-exit")?.focus({ preventScroll: true });
                         }}>Full</button>
                     </div>
                 )}
@@ -1134,8 +1112,14 @@ function ChatStart({ agent, recent = [] }: { agent: string; recent?: readonly Co
 
 // ── the queue ────────────────────────────────────────────────────────────────
 
-// follow-ups typed while a turn runs, per chat and in send order; mirrored to localStorage because a queued message is a promise
-const QUEUE = new Map<string, string[]>();
+interface Queued {
+    text: string;
+    images: string[];
+}
+
+// follow-ups typed while a turn runs, per chat and in send order; their words are mirrored to localStorage because a queued message is a promise,
+// their images stay in memory only (a store's 5 MB would not hold them), so a reload keeps the words and drops a message of images alone
+const QUEUE = new Map<string, Queued[]>();
 const QUEUE_KEY = "mimi-os:chat-queue";
 
 type ChatMode = "chat" | "web" | "full";
@@ -1157,6 +1141,29 @@ const PANEL_MAX = 640;
 // how long the line saying whose page this is stays on entering Full; chat.css fades it out just before
 const NOTE_MS = 4000;
 
+// each interface's size when last in sight: a hidden page keeps the size it had, so it shows again at that size first
+const FRAME_SIZES = new WeakMap<HTMLIFrameElement, readonly [number, number]>();
+
+/** Keeps the interface in `screen` at its size through the switch about to be drawn and resizes it a frame later, so mimi's side shows at once. */
+function holdFrame(screen: Element | null): void {
+    const frame = screen?.querySelector<HTMLIFrameElement>(".chat-web .interfaces-page:not([hidden])>.interfaces-frame");
+    if (!frame) return;
+    const [width, height] = frame.clientWidth > 0 ? [frame.clientWidth, frame.clientHeight] : FRAME_SIZES.get(frame) ?? [0, 0];
+    if (width === 0) return;
+    FRAME_SIZES.set(frame, [width, height]);
+    const { style } = frame;
+    // content-box: Web draws a border round the frame and Full does not, and the page's own size is what must hold
+    style.boxSizing = "content-box";
+    style.flex = "none";
+    style.width = `${width}px`;
+    style.height = `${height}px`;
+    // let go once the frame showing the switch is drawn, laid out at once, so the page starts on its new size with the next frame
+    requestAnimationFrame(() => setTimeout(() => {
+        style.boxSizing = style.flex = style.width = style.height = "";
+        frame.getBoundingClientRect();
+    }));
+}
+
 // ── the chat ─────────────────────────────────────────────────────────────────
 
 interface ChatProps {
@@ -1168,11 +1175,9 @@ interface ChatProps {
     gates: number;
     elsewhere: number;
     slash: readonly Command[];
-    /** Tells the shell whether this chat is in Full, where the shell draws nothing of its own. */
-    onFull: (full: boolean) => void;
 }
 
-function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, onFull }: ChatProps): ReactElement {
+function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash }: ChatProps): ReactElement {
     const key = `${agent}#${conversation}`;
     // the loaded window of history, oldest first; null until the first page, since an empty thread and an unread one differ
     const [rows, setRows] = useState<HistoryMessage[] | null>(() => HISTORY_CACHE.get(key)?.rows ?? null);
@@ -1191,14 +1196,19 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
     const [notice, setNotice] = useState("");
     const [syncError, setSyncError] = useState("");
     const pendingSync = useRef<number | null>(null);
-    const [queue, setQueue] = useState<string[]>(() => {
+    const [queue, setQueue] = useState<Queued[]>(() => {
         const held = QUEUE.get(key);
         if (held) return held;
-        let list: string[] = [];
+        let list: Queued[] = [];
         try {
             const parsed: unknown = JSON.parse(localStorage.getItem(`${QUEUE_KEY}:${key}`) ?? "[]");
             // filtered, not trusted: any other tab could have written this
-            if (Array.isArray(parsed)) list = parsed.filter((x): x is string => typeof x === "string");
+            if (Array.isArray(parsed)) {
+                list = parsed.flatMap((x: unknown) => {
+                    const text = (x as { text?: unknown } | null)?.text;
+                    return typeof text === "string" && text ? [{ text, images: [] }] : [];
+                });
+            }
         } catch {
             // corrupt or unavailable storage must not keep a chat from opening
         }
@@ -1206,7 +1216,7 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
         return list;
     });
     // the queue for code between renders: the drain is a chain of awaits
-    const queued = useRef<string[]>(queue);
+    const queued = useRef<Queued[]>(queue);
     const [editing, setEditing] = useState<number | null>(null);
     const [busy, setBusy] = useState(false);
     const [now, setNow] = useState(() => Date.now());
@@ -1239,14 +1249,13 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
     const [panelShape, setPanelShape] = useState(full);
     if (!onWeb && panelShape) setPanelShape(false);
     if (full && !panelShape) setPanelShape(true);
-    // set by a click on the panel's button, so only that moves the panel: a switch of view shows or hides it in place
-    const [toggled, setToggled] = useState(false);
+    const screen = useRef<HTMLElement | null>(null);
     const onView = useCallback((mode: ChatMode, app: string | undefined): void => {
+        holdFrame(screen.current);
         // Full keeps the view it was entered from, which Exit and Escape go back to
         const next = { mode, app, from: mode === "full" && view.mode !== "full" ? view.mode : view.from };
         VIEWS.set(agent, next);
         setView(next);
-        setToggled(false);
     }, [agent, view]);
     const [panelOpen, setPanelOpen] = useState(() => {
         try {
@@ -1264,11 +1273,6 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
         }
         return Math.min(PANEL_MAX, Math.max(PANEL_MIN, stored || 420));
     });
-    // before paint, so the sidebar never flashes in for a frame on the way into Full or out of it
-    useLayoutEffect(() => {
-        onFull(full);
-        return () => onFull(false);
-    }, [full, onFull]);
     // the page's own strip is gone in Full, so mimi says whose page this is once on the way in, then lets it fade
     const [note, setNote] = useState(full);
     const [wasFull, setWasFull] = useState(full);
@@ -1287,7 +1291,6 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
     const paneId = useId();
     const pane = useRef<HTMLDivElement | null>(null);
     const launcher = useRef<HTMLButtonElement | null>(null);
-    const exit = useRef<HTMLButtonElement | null>(null);
     const composer = useRef<ComposerHandle | null>(null);
 
     const thread = useRef<HTMLDivElement | null>(null);
@@ -1343,7 +1346,7 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
         const meta = src[promptAt]?.meta;
         const estimate = summaryAt > promptAt || meta?.usageEstimated === true;
         const used = summaryAt > promptAt
-            ? Math.ceil(src.slice(summaryAt).reduce((n, r) => n + r.content.length, 0) / 4)
+            ? Math.ceil(src.slice(summaryAt).reduce((n, r) => n + r.content.length / 4 + (r.images ?? 0) * IMAGE_TOKENS, 0))
             : (meta?.promptTokens ?? null);
         if (used === null) return null;
         const window = (models?.find((m) => meta?.modelUid && m.modelUid === meta.modelUid) ?? models?.find((m) => m.name === meta?.registryModel) ?? models?.find((m) => m.isDefault))?.contextTokens ?? 0;
@@ -1356,13 +1359,14 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
     const past = useMemo(() => rows === null ? [] : rebuild(replayFrom === undefined ? rows : rows.filter((r) => r.id <= replayFrom)), [rows, replayFrom]);
 
     // the one way the queue changes: the ref first, so a drain under way sees it, then the render, then the store
-    const writeQueue = useCallback((next: string[]): void => {
+    const writeQueue = useCallback((next: Queued[]): void => {
         queued.current = next;
         setQueue(next);
         QUEUE.set(key, next);
+        const words = next.flatMap((q) => (q.text ? [{ text: q.text }] : []));
         try {
-            if (next.length === 0) localStorage.removeItem(`${QUEUE_KEY}:${key}`);
-            else localStorage.setItem(`${QUEUE_KEY}:${key}`, JSON.stringify(next));
+            if (words.length === 0) localStorage.removeItem(`${QUEUE_KEY}:${key}`);
+            else localStorage.setItem(`${QUEUE_KEY}:${key}`, JSON.stringify(words));
         } catch {
             // the in-memory copy still carries this session
         }
@@ -1437,8 +1441,9 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
         setNotice((m) => (m === failed ? "" : m));
     }, [listFresh]);
 
-    /** One turn folded into turnId from its POST or GET …/stream, re-attached after a break; one that ended meanwhile is read from history. */
-    const follow = useCallback(async (turnId: number, post: AsyncGenerator<TurnEvent> | null, signal: AbortSignal): Promise<Followed> => {
+    /** One turn folded into turnId from its POST or GET …/stream, re-attached after a break; one that ended meanwhile is read from history.
+     *  `sent` are the POST's images, cached under the turn's seq so its stored row shows them without a fetch. */
+    const follow = useCallback(async (turnId: number, post: AsyncGenerator<TurnEvent> | null, signal: AbortSignal, sent: string[] = []): Promise<Followed> => {
         const run: Followed = { got: false, ended: false, failed: false, turnSeq: 0 };
         let completion: Extract<TurnEvent, { type: "done" }> | undefined;
         let source = post ?? attachTurn(agent, conversation, signal);
@@ -1454,12 +1459,19 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
                     const fresh = attached && !heard;
                     heard = true;
                     run.got = true;
-                    if (ev.type === "turn_started") run.turnSeq = ev.turnSeq;
+                    if (ev.type === "turn_started") {
+                        run.turnSeq = ev.turnSeq;
+                        seedImages(imagesKey(agent, conversation, ev.turnSeq), sent);
+                    }
                     if (ev.type === "done") {
                         run.ended = true;
                         completion = ev;
                     }
-                    if (ev.type === "error") run.failed = true;
+                    if (ev.type === "error") {
+                        run.failed = true;
+                        // nothing was stored before turn_started (a model that cannot take the images, a paused agent): the message comes back
+                        if (post && !run.turnSeq) run.refused = ev.message;
+                    }
                     // the replay rebuilds each open card, which must come back with the owner's ticks, not all of them
                     patchTurn(turnId, (t) => fold(fresh ? {
                         ...t,
@@ -1800,7 +1812,7 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
         stopping.current = false;
         const ctl = new AbortController();
         abort.current = ctl;
-        const run = await follow(turnId, runTurn(agent, conversation, text, imgs, ctl.signal), ctl.signal);
+        const run = await follow(turnId, runTurn(agent, conversation, text, imgs, ctl.signal), ctl.signal, imgs);
         if (run.refused) {
             // refused before anything reached the agent: the message comes back out of the thread
             setLive((list) => list.filter((it) => it.id !== msgId && it.id !== turnId));
@@ -1824,10 +1836,15 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
             const next = queued.current[0];
             if (next === undefined) return;
             writeQueue(queued.current.slice(1));
-            const text = next.trim();
-            if (!text) continue;
-            if (await deliver(text, [])) continue;
-            if (unsent.current) writeQueue([text, ...queued.current]);
+            const text = next.text.trim();
+            if (!text && next.images.length === 0) continue;
+            if (await deliver(text, next.images)) continue;
+            if (unsent.current) {
+                // deliver's notice already says why it was refused
+                writeQueue([{ text, images: next.images }, ...queued.current]);
+                setNotice((m) => `${m} The unsent message is back in the queue.`.trim());
+                return;
+            }
             const left = queued.current.length;
             setNotice(left === 0
                 ? "That turn did not finish, so nothing more was sent."
@@ -1837,9 +1854,9 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
     };
 
     const restoreUnsent = (text: string, imgs: string[]): void => {
-        // the box takes the images back whatever it holds; the queue only ever takes words
-        if (composer.current?.restore(text, imgs) || !text) return;
-        writeQueue([text, ...queued.current]);
+        // the box when it is free, else the front of the queue: either way the message stays whole
+        if (composer.current?.restore(text, imgs)) return;
+        writeQueue([{ text, images: imgs }, ...queued.current]);
         setNotice((m) => `${m} The unsent message is back in the queue.`.trim());
     };
 
@@ -1851,8 +1868,14 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
 
     const submit = (text: string, imgs: string[]): SubmitResult => {
         if (running.current) {
-            if (!text) return "refused";
-            writeQueue([...queued.current, text]);
+            if (!text && imgs.length === 0) return "refused";
+            // queued images are held in memory, so the queue's together are capped at one message's worth
+            const held = queued.current.reduce((n, q) => n + q.images.length, 0);
+            if (imgs.length > 0 && held + imgs.length > MAX_IMAGES) {
+                setNotice(`The queue holds ${held} ${plural(held, "image", "images")} and carries ${MAX_IMAGES} until it sends. This message stays in the box.`);
+                return "refused";
+            }
+            writeQueue([...queued.current, { text, images: imgs }]);
             return "queued";
         }
         // before the first page lands, a turn would be ordered against a history that has not arrived
@@ -1891,7 +1914,7 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
     // an edit truncates the chat from that row for good, unlike compaction, so the confirm is a danger one
     const editMessage = async (messageId: number, text: string): Promise<void> => {
         if (running.current || rows === null) return;
-        const over = tooLarge(text, []);
+        const over = tooLarge(text);
         if (over) {
             setNotice(over);
             return;
@@ -2017,10 +2040,8 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
 
     const togglePanel = useCallback((): void => {
         const opening = !panelOpen;
-        flushSync(() => {
-            setPanelOpen(opening);
-            setToggled(true);
-        });
+        holdFrame(screen.current);
+        flushSync(() => setPanelOpen(opening));
         try {
             if (opening) localStorage.setItem(`${PANEL_KEY}:${agent}`, "open");
             else localStorage.removeItem(`${PANEL_KEY}:${agent}`);
@@ -2039,11 +2060,12 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
 
     // Exit, or Escape with the panel closed: back to the view Full was entered from
     const exitFull = useCallback((): void => {
-        const screen = exit.current?.closest(".chat-screen");
         flushSync(() => onView(view.from, view.app));
         // Exit leaves with Full, and the frame too when Full came from Chat: focus goes to the view's own button in the header
         const at = document.activeElement;
-        if (!at || at === document.body || !at.checkVisibility()) screen?.querySelector<HTMLButtonElement>(".chat-view [aria-pressed=true]")?.focus();
+        if (!at || at === document.body || (view.from === "chat" && at.closest(".chat-web"))) {
+            screen.current?.querySelector<HTMLButtonElement>(".chat-view [aria-pressed=true]")?.focus({ preventScroll: true });
+        }
     }, [onView, view]);
 
     // on document: a field's own Escape (the slash list, a rename) comes first, and the gate's binding on window after it, so Escape never denies here
@@ -2092,11 +2114,11 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
 
     return (
         <section
+            ref={screen}
             className="chat-screen"
             aria-label={title}
             data-view={full ? "full" : onWeb ? "web" : undefined}
             data-open={full && panelOpen ? "" : undefined}
-            data-toggled={full && toggled ? "" : undefined}
             data-panel={panelShape ? "" : undefined}
             style={{ "--pane-w": `${panelWidth}px` } as CSSProperties}
             onDragEnter={(e) => {
@@ -2188,6 +2210,7 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
                         <div className={fresh ? "thread-past enter" : "thread-past"}>
                             <PastThread
                                 agent={agent}
+                                conversation={conversation}
                                 items={past}
                                 editing={editing}
                                 canEdit={!busy}
@@ -2222,14 +2245,15 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
                             <p className="queue-note">
                                 {queue.length} queued. {busy ? "They send in order when this turn ends well." : "They go out in order after your next message."}
                             </p>
-                            {queue.map((text, i) => {
+                            {queue.map((item, i) => {
                                 // a queued message is the text it will send: its pasted blocks show as names, and only the words are edited here
-                                const { pastes, text: typed } = parsePasted(text);
+                                const { pastes, text: typed } = parsePasted(item.text);
                                 return (
                                     // index keys: the entries have no identity of their own, and their order is what is being edited
                                     <div key={i} className="queue-row">
                                         <span className="queue-n">{i + 1}</span>
                                         <div className="queue-item">
+                                            {item.images.length > 0 && <QueuedImages images={item.images} />}
                                             {pastes.length > 0 && (
                                                 <div className="queue-pastes">
                                                     {pastes.map((p, j) => (
@@ -2242,7 +2266,7 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
                                                 rows={1}
                                                 aria-label={`Queued message ${i + 1}`}
                                                 value={typed}
-                                                onChange={(e) => writeQueue(queued.current.map((q, j) => (j === i ? buildPasted(parsePasted(q).pastes, e.target.value) : q)))}
+                                                onChange={(e) => writeQueue(queued.current.map((q, j) => (j === i ? { ...q, text: buildPasted(parsePasted(q.text).pastes, e.target.value) } : q)))}
                                             />
                                         </div>
                                         <Btn kind="quiet" sm icon="close" title="Remove from the queue" onClick={() => writeQueue(queued.current.filter((_, j) => j !== i))} />
@@ -2262,6 +2286,7 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
                         queued={queue.length}
                         canAttach={currentModel?.vision === true}
                         noImages={currentModel && !currentModel.vision ? currentModel.name : null}
+                        contextTokens={currentModel?.contextTokens}
                         meter={meter}
                         slash={slash}
                         blocked={blocked}
@@ -2333,7 +2358,6 @@ function ChatView({ agent, conversation, me, agents, gates, elsewhere, slash, on
                 <div className="chat-corner">
                     {note && <p className="chat-note" role="note"><Icon name="app" sm />Agent page. mimi never asks for keys or pairing links here.</p>}
                     <button
-                        ref={exit}
                         type="button"
                         className="chat-exit"
                         aria-label={`Exit Full, back to ${view.from === "chat" ? "Chat" : "Web"}`}

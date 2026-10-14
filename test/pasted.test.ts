@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { MAX_IMAGE_BYTES, MAX_IMAGES } from "@mimi-os/protocol";
+
 import { BODY_BUDGET, FILE_MAX, isLongPaste, newPaste, PASTE_CHARS, PASTE_LINES, readDropped, size, textSize, tooLarge } from "../src/pasted.ts";
 
 test("a paste over 2,000 characters or 30 lines becomes a card; one at the limit stays in the box", () => {
@@ -49,19 +51,20 @@ test("a dropped file: an image keeps the image path, text-like files become card
     assert.equal((await readDropped(new File(["x".repeat(FILE_MAX)], "max.log", { type: "text/plain" }))).kind, "text", "900 KB itself fits");
 });
 
-test("the size limit is the JSON body as bytes: escapes, multi-byte text and images all count", () => {
+test("the size limit is the text as the body carries it, JSON-escaped UTF-8; images are bounded by count and size, so a full message fits the gateway's body", () => {
     assert.equal(BODY_BUDGET, 990_000);
-    assert.equal(tooLarge("hello", []), null);
-    assert.equal(tooLarge("x".repeat(BODY_BUDGET - 30), []), null, `{"text":"…","images":[]} adds 24 bytes`);
-    assert.notEqual(tooLarge("x".repeat(BODY_BUDGET), []), null);
-    // 600 000 line breaks are 1 200 000 bytes once JSON escapes them, and the body's own 23 bytes come on top
-    const breaks = "\n".repeat(600_000);
-    assert.equal(tooLarge(breaks, []), "This message is 1.2 MB and one message carries at most 990 KB. Remove at least 211 KB, then send again.");
+    assert.equal(tooLarge("hello"), null);
+    assert.equal(tooLarge("x".repeat(BODY_BUDGET - 2)), null, "990 KB with its two quotes fits");
+    assert.equal(tooLarge("x".repeat(BODY_BUDGET - 1)), "This message is 990 KB and one message carries at most 990 KB. Remove at least 1 KB, then send again.");
+    // 600 000 line breaks are 1 200 000 bytes once JSON escapes them
+    assert.equal(tooLarge("\n".repeat(600_000)), "This message is 1.2 MB and one message carries at most 990 KB. Remove at least 211 KB, then send again.");
     // a Cyrillic letter is two bytes, so 500 000 of them do not fit though they are half the characters
-    assert.match(tooLarge("ж".repeat(500_000), []) ?? "", /Remove at least 11 KB/);
-    const image = `data:image/jpeg;base64,${"A".repeat(187_000)}`;
-    assert.equal(tooLarge("x".repeat(240_000), [image, image, image, image]), null);
-    assert.equal(tooLarge("x".repeat(250_000), [image, image, image, image]), "This message is 998 KB and one message carries at most 990 KB. Remove at least 9 KB, then send again.");
+    assert.equal(tooLarge("ж".repeat(500_000)), "This message is 1 MB and one message carries at most 990 KB. Remove at least 11 KB, then send again.");
+    // the worst the box can send: 32 full images and the largest text it lets through, a third of it quotes and line breaks
+    const worst = '"\nx'.repeat(Math.floor((BODY_BUDGET - 2) / 5));
+    assert.equal(tooLarge(worst), null);
+    const images = Array.from({ length: MAX_IMAGES }, () => `data:image/jpeg;base64,${"A".repeat(MAX_IMAGE_BYTES - 23)}`);
+    assert.ok(new TextEncoder().encode(JSON.stringify({ text: worst, images })).length < 16_400_000, "under the gateway's turn body");
 });
 
 test("sizes read as a card says them", () => {
@@ -84,7 +87,7 @@ test("the box turns a long paste into a card, sends with cards alone, and keeps 
     assert.match(composer, /const text = e\.clipboardData\.getData\("text\/plain"\);\s*if \(!isLongPaste\(text\)\) return;\s*e\.preventDefault\(\);/);
     assert.match(composer, /e\.preventDefault\(\);\s*setPastes\(\(cur\) => \[\.\.\.cur, newPaste\(cur, text\)\]\);/);
     assert.match(composer, /const empty = !draft\.trim\(\) && images\.length === 0 && pastes\.length === 0;/);
-    assert.match(composer, /disabled=\{!draft\.trim\(\) && pastes\.length === 0\}/, "Queue takes a message of cards alone");
+    assert.match(composer, /<Btn icon="queue" disabled=\{empty\}/, "Queue takes a message of cards alone");
     assert.match(composer, /const saved = buildPasted\(pastes, draft\);\s*DRAFTS\.set\(draftKey, saved\);/);
     assert.match(composer, /const kept = parsePasted\(held\);/);
 });
@@ -111,10 +114,10 @@ test("a long paste into an edit becomes a card as it does in the box", () => {
 
 test("the size check runs before anything leaves the box, and a refusal keeps the box as it was", () => {
     const submit = composer.slice(composer.indexOf("const submit = (): void => {"), composer.indexOf("const addFiles"));
-    const check = submit.indexOf("const over = tooLarge(text, busy ? [] : images);");
-    assert.ok(check !== -1 && check < submit.indexOf("onSubmit(text, images)"));
+    const check = submit.indexOf("const over = tooLarge(text);");
+    assert.ok(check !== -1 && check < submit.indexOf("onSubmit(text, images.map((s) => s.uri))"));
     assert.match(submit, /if \(over\) \{\s*onNotice\(over\);\s*return;\s*\}/);
-    assert.match(chat, /const over = tooLarge\(text, \[\]\);\s*if \(over\) \{\s*setNotice\(over\);\s*return;\s*\}\s*const ok = await dialog\.confirm/, "an edit is checked before anything is deleted");
+    assert.match(chat, /const over = tooLarge\(text\);\s*if \(over\) \{\s*setNotice\(over\);\s*return;\s*\}\s*const ok = await dialog\.confirm/, "an edit is checked before anything is deleted");
 });
 
 test("only messages from a box are read for pasted blocks; the copy is plain; an edit and a queued message keep their cards", () => {
@@ -122,7 +125,7 @@ test("only messages from a box are read for pasted blocks; the copy is plain; an
     assert.match(chat, /<CopyTextButton text=\{\[\.\.\.pastes\.map\(\(p\) => p\.text\), typed\]\.filter\(Boolean\)\.join\("\\n\\n"\)\} label="Copy message" \/>/);
     assert.match(chat, /const \[start\] = useState\(\(\) => parsePasted\(text\)\);/);
     assert.match(chat, /onSave\(buildPasted\(pastes, value\.trim\(\)\)\)/);
-    assert.match(chat, /j === i \? buildPasted\(parsePasted\(q\)\.pastes, e\.target\.value\) : q/);
+    assert.match(chat, /j === i \? \{ \.\.\.q, text: buildPasted\(parsePasted\(q\.text\)\.pastes, e\.target\.value\) \} : q/);
 });
 
 test("a card ends its preview lines with CSS and the viewer holds a Back entry; no shadow anywhere on them", () => {

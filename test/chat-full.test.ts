@@ -22,12 +22,35 @@ test("Full draws no header: the chat's own header is not rendered there, and not
     assert.match(source, /\{!full && \(\s*<ChatHead\s/);
     assert.equal(source.split("<ChatHead").length - 1, 1, "one header, and Full has none");
     assert.match(source, /view=\{androidApp \|\| \(webApp === undefined && !onWeb\) \? null : onWeb \? "web" : "chat"\}/);
-    assert.match(app, /data-full=\{inFull \? "" : undefined\}/);
-    assert.match(layout, /\.app\[data-full\]\{grid-template-columns:0 minmax\(0,1fr\)\}/);
-    assert.match(layout, /\.app\[data-full\]>:is\(\.side,\.bar\)\{display:none\}/);
-    assert.match(layout, /\.app\[data-full\]>\.work\{margin:0;border:0;border-radius:0\}/);
-    // before paint, so the sidebar never flashes in on the way into Full
-    assert.match(source, /useLayoutEffect\(\(\) => \{\s*onFull\(full\);\s*return \(\) => onFull\(false\);\s*\}, \[full, onFull\]\);/);
+    // the stylesheet reads the chat's own data-view, so the shell takes no part and the sidebar never flashes in on the way into Full
+    assert.match(layout, /\.app:has\(>\.work>\.chat-screen\[data-view=full\]\)>\.work\{grid-area:1\/1\/3\/3;margin:0;border:0;border-radius:0\}/);
+    // hidden, never display:none: the sidebar is not laid out again on Exit, and its one-off entrance never replays
+    assert.match(layout, /\.app:has\(>\.work>\.chat-screen\[data-view=full\]\)>:is\(\.side,\.bar\)\{visibility:hidden\}/);
+    assert.doesNotMatch(layout, /data-full|grid-template-columns:0 /);
+});
+
+test("going in and out of Full never redraws the shell: no Full state there, the chat tells it nothing", () => {
+    assert.doesNotMatch(app, /data-full|setInFull|onFull/);
+    assert.doesNotMatch(source, /onFull/);
+    assert.match(app, /const FULL = "\.work>\.chat-screen\[data-view=full\]";/);
+});
+
+test("a switch shows mimi's side at once and resizes the interface a frame later", () => {
+    const hold = source.slice(source.indexOf("function holdFrame("), source.indexOf("// ── the chat ──"));
+    assert.match(hold, /\.querySelector<HTMLIFrameElement>\("\.chat-web \.interfaces-page:not\(\[hidden\]\)>\.interfaces-frame"\)/);
+    // read before any write, or the read would lay out the half-held frame
+    assert.ok(hold.indexOf("frame.clientHeight") < hold.indexOf("style.boxSizing"));
+    // the page's own size holds whether or not a border is drawn round it; a hidden page shows again at the size it kept
+    assert.match(hold, /style\.boxSizing = "content-box";\s*style\.flex = "none";\s*style\.width = `\$\{width\}px`;\s*style\.height = `\$\{height\}px`;/);
+    assert.match(hold, /: FRAME_SIZES\.get\(frame\) \?\? \[0, 0\];/);
+    // a task queued from the frame that shows the switch runs once it is drawn; laid out there, the page starts the next frame on its new size
+    assert.match(hold, /requestAnimationFrame\(\(\) => setTimeout\(\(\) => \{\s*style\.boxSizing = style\.flex = style\.width = style\.height = "";\s*frame\.getBoundingClientRect\(\);\s*\}\)\);/);
+    // every switch of view, Exit and Escape included, and the panel both ways
+    assert.match(source, /const onView = useCallback\(\(mode: ChatMode, app: string \| undefined\): void => \{\s*holdFrame\(screen\.current\);/);
+    assert.match(source, /holdFrame\(screen\.current\);\s*flushSync\(\(\) => setPanelOpen\(opening\)\);/);
+    assert.equal(source.split("holdFrame(").length - 1, 3, "the function and its two callers");
+    // what does not fit for that frame is cut, never scrolled to
+    assert.match(css, /\.chat-web \.interfaces-page\{overflow:clip\}/);
 });
 
 test("Full draws no strip: the tab's toolbar, with the agent-page line and Reload on it, and the page switcher are Web's, and the page goes edge to edge", () => {
@@ -88,9 +111,11 @@ test("Exit goes back to the view Full was entered from, Web or Chat, and focus f
     assert.match(source, /const VIEWS = new Map<string, \{ mode: ChatMode; app: string \| undefined; from: "chat" \| "web" \}>\(\);/);
     const exit = source.slice(source.indexOf("const exitFull = useCallback"), source.indexOf("}, [onView, view]);"));
     assert.match(exit, /flushSync\(\(\) => onView\(view\.from, view\.app\)\);/);
-    assert.match(exit, /if \(!at \|\| at === document\.body \|\| !at\.checkVisibility\(\)\) screen\?\.querySelector<HTMLButtonElement>\("\.chat-view \[aria-pressed=true\]"\)\?\.focus\(\);/);
+    // known from the view, never probed, so the click lays nothing out: Exit is gone, and the frame with it when Full came from Chat
+    assert.match(exit, /if \(!at \|\| at === document\.body \|\| \(view\.from === "chat" && at\.closest\("\.chat-web"\)\)\) \{\s*screen\.current\?\.querySelector<HTMLButtonElement>\("\.chat-view \[aria-pressed=true\]"\)\?\.focus\(\{ preventScroll: true \}\);/);
+    assert.doesNotMatch(exit, /checkVisibility/);
     // the Full button leaves with the header: focus goes to Exit
-    assert.match(source, /flushSync\(\(\) => onView\("full", app\)\);\s*screen\?\.querySelector<HTMLButtonElement>\("\.chat-exit"\)\?\.focus\(\);/);
+    assert.match(source, /flushSync\(\(\) => onView\("full", app\)\);\s*screen\?\.querySelector<HTMLButtonElement>\("\.chat-exit"\)\?\.focus\(\{ preventScroll: true \}\);/);
 });
 
 test("Escape closes an open panel first, then leaves Full; one held down takes one step; an Escape forwarded from the interface does the same", () => {
@@ -111,7 +136,7 @@ test("the agent-page note shows once on entering Full, drawn by mimi, then fades
     assert.match(source, /\{note && <p className="chat-note" role="note"><Icon name="app" sm \/>Agent page\. mimi never asks for keys or pairing links here\.<\/p>\}/);
     assert.equal(source.split("mimi never asks for keys").length - 1, 1, "one note, in the corner");
     // fades out just before NOTE_MS takes it away: 3.7 s + 220 ms < 4 s
-    assert.match(css, /\.chat-note\{animation:fade-in var\(--dur-2\) var\(--ease-out\) both,fade-out var\(--dur-3\) var\(--ease-in\) 3\.7s forwards\}/);
+    assert.match(css, /\.chat-note\{animation:fade-out var\(--dur-3\) var\(--ease-in\) 3\.7s forwards\}/);
     assert.match(fullCss, /\.chat-note\{[^}]*background:var\(--panel-2\);color:var\(--ink-3\);font:var\(--f-xs\)/);
     assert.match(fullCss, /\.chat-corner\{[^}]*pointer-events:none\}/, "the note never takes a click meant for the page");
 });
@@ -130,8 +155,14 @@ test("the panel hangs from the right edge: its left edge dragged left, or ArrowL
     assert.match(source, /const PANEL_MIN = 320;\s*const PANEL_MAX = 640;/);
     assert.match(source, /return Math\.min\(PANEL_MAX, Math\.max\(PANEL_MIN, stored \|\| 420\)\);/);
     assert.match(source, /role="separator"\s*aria-orientation="vertical"/);
-    // closed, it slides toward the edge it hangs from
-    assert.match(css, /\.chat-screen\[data-view=full\]:not\(\[data-open\]\)>\.chat-pane\{visibility:hidden;opacity:0;translate:var\(--s3\) 0\}/);
+    assert.match(css, /\.chat-screen\[data-view=full\]:not\(\[data-open\]\)>\.chat-pane\{visibility:hidden\}/);
+});
+
+test("Full's controls and panel come and go at once: the interface is resized right after, and a busy page would swallow a fade or a slide", () => {
+    const motion = css.slice(css.indexOf("@media (prefers-reduced-motion:no-preference)"));
+    assert.doesNotMatch(motion, /chat-launch|chat-exit|chat-pane|data-toggled/);
+    assert.doesNotMatch(motion, /\.chat-note\{animation:fade-in/);
+    assert.doesNotMatch(source, /data-toggled|setToggled/);
 });
 
 test("the button and the panel's close move focus in on open and back on close", () => {
@@ -152,10 +183,12 @@ test("closed, the button counts what waits in this chat and dots a reply not yet
 test("⌘B means nothing in Full: no sidebar to show, no second sidebar state, no palette command", () => {
     assert.doesNotMatch(app, /full-sidebar|BARE_KEY|toggleBare|toggleSide|setBare/);
     assert.doesNotMatch(source, /\bonSide\b|\bbare\b|chat-side|=== "b" && \(e\.metaKey/);
-    assert.match(app, /if \(key === "b" && wideQuery\.matches && !inFull\) \{\s*e\.preventDefault\(\);\s*toggleFold\(\);/);
-    assert.match(app, /if \(\(e as CustomEvent<string>\)\.detail === "b" && wideQuery\.matches && !inFull\) toggleFold\(\);/);
+    assert.match(app, /if \(key === "b" && wideQuery\.matches && !document\.querySelector\(FULL\)\) \{\s*e\.preventDefault\(\);\s*toggleFold\(\);/);
+    assert.match(app, /if \(\(e as CustomEvent<string>\)\.detail === "b" && wideQuery\.matches && !document\.querySelector\(FULL\)\) toggleFold\(\);/);
+    // read on every draw of the shell, and opening the palette is one, so the list is right whenever it shows
+    assert.match(app, /const inFull = document\.querySelector\(FULL\) !== null;\s*const commands = useMemo<Command\[\]>/);
     assert.match(app, /if \(wide && !inFull\) \{\s*out\.push\(\{\s*id: "do:sidebar",/);
-    assert.match(app, /slash=\{slash\} onFull=\{setInFull\} \/>/);
+    assert.match(app, /folded, inFull, toggleFold,/);
     assert.match(app, /onFold=\{toggleFold\}/);
 });
 

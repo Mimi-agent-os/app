@@ -39,6 +39,8 @@ const Inbox = lazy(() => import("./views/inbox.tsx"));
 
 // two states: folded writes "off", unfolded removes the key
 const SIDE_KEY = "mimi-os:sidebar";
+// a chat showing its interface in Full (chat.tsx), where the shell draws nothing of its own: read off the page, so going in and out of Full never redraws the shell
+const FULL = ".work>.chat-screen[data-view=full]";
 
 const wideQuery = matchMedia(WIDE);
 const onWideChange = (listener: () => void): (() => void) => {
@@ -111,9 +113,6 @@ function Shell(): ReactElement {
             return !was;
         });
     }, []);
-    // set by the open chat while it shows its interface in Full: the shell then draws nothing, so ⌘B has no sidebar to fold
-    const [inFull, setInFull] = useState(false);
-
     // ── the gateway's state, each read with its own request serial ──────────────
 
     // an identical answer keeps the old object, so nothing downstream re-renders for it
@@ -276,7 +275,7 @@ function Shell(): ReactElement {
         const onKey = (e: KeyboardEvent): void => {
             if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.defaultPrevented || e.isComposing) return;
             const key = e.key.toLowerCase();
-            if (key === "b" && wideQuery.matches && !inFull) {
+            if (key === "b" && wideQuery.matches && !document.querySelector(FULL)) {
                 e.preventDefault();
                 toggleFold();
                 return;
@@ -289,7 +288,7 @@ function Shell(): ReactElement {
         };
         // the same chord pressed inside an interface, forwarded by its bridge
         const onFrameKey = (e: Event): void => {
-            if ((e as CustomEvent<string>).detail === "b" && wideQuery.matches && !inFull) toggleFold();
+            if ((e as CustomEvent<string>).detail === "b" && wideQuery.matches && !document.querySelector(FULL)) toggleFold();
         };
         window.addEventListener("keydown", onKey);
         window.addEventListener("mimi:frame-key", onFrameKey);
@@ -297,7 +296,7 @@ function Shell(): ReactElement {
             window.removeEventListener("keydown", onKey);
             window.removeEventListener("mimi:frame-key", onFrameKey);
         };
-    }, [toggleFold, inFull]);
+    }, [toggleFold]);
 
     // ── commands ──────────────────────────────────────────────────────────────────
 
@@ -337,6 +336,8 @@ function Shell(): ReactElement {
         return pair ? `chat:${pair[0]}:${pair[1]}` : undefined;
     }, [recent]);
 
+    // read on each draw of the shell, opening the palette included, so the sidebar command is never offered in Full
+    const inFull = document.querySelector(FULL) !== null;
     const commands = useMemo<Command[]>(() => {
         const out: Command[] = [];
         const known = agents ?? [];
@@ -491,7 +492,7 @@ function Shell(): ReactElement {
     )
         : route?.at === "chat" && me && agents ? (
             <Chat key={`${route.agent}#${route.id}`} agent={route.agent} conversation={route.id} me={me} agents={agents}
-                gates={gatesHere} elsewhere={approvals.length - gatesHere} slash={slash} onFull={setInFull} />
+                gates={gatesHere} elsewhere={approvals.length - gatesHere} slash={slash} />
         )
         : route?.at === "new" && me ? <ChatPending agent={route.agent} />
         : route?.at === "agent" && me ? (
@@ -517,7 +518,7 @@ function Shell(): ReactElement {
 
     return (
         <div className="app" data-side={folded && wide ? "off" : "on"} data-stack={route?.at === "home" ? "home" : "screen"}
-            data-bar={route?.at === "chat" || route?.at === "new" ? "off" : "on"} data-full={inFull ? "" : undefined}>
+            data-bar={route?.at === "chat" || route?.at === "new" ? "off" : "on"}>
             {/* null once this device has a paired session, a modal dialog otherwise */}
             <PairGate />
             <aside className="side">

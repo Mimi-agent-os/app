@@ -7,7 +7,7 @@ export const PASTE_CHARS = 2000;
 export const PASTE_LINES = 30;
 /** The largest dropped file that becomes a card. */
 export const FILE_MAX = 900_000;
-/** The gateway refuses a request body over 1 000 000 bytes; the rest is headroom. */
+/** The gateway refuses a message's text over 1 000 000 bytes; the rest is headroom. Images are bounded by their count and per-image size. */
 export const BODY_BUDGET = 990_000;
 
 const UTF8 = new TextEncoder();
@@ -29,9 +29,10 @@ export function size(bytes: number): string {
 
 export const textSize = (text: string): string => size(UTF8.encode(text).length);
 
-/** Null when the request body fits the gateway, else the notice that says how much has to go. */
-export function tooLarge(text: string, images: readonly string[]): string | null {
-    const bytes = UTF8.encode(JSON.stringify({ text, images })).length;
+/** Null when the message's text fits the gateway, else the notice that says how much has to go. */
+export function tooLarge(text: string): string | null {
+    // as the body carries it: a quote or a line break is two bytes there, a control character six
+    const bytes = UTF8.encode(JSON.stringify(text)).length;
     if (bytes <= BODY_BUDGET) return null;
     return `This message is ${size(bytes)} and one message carries at most ${size(BODY_BUDGET)}. Remove at least ${Math.ceil((bytes - BODY_BUDGET) / 1000)} KB, then send again.`;
 }

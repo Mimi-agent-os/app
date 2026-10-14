@@ -450,7 +450,7 @@ export async function* runTurn(
     agent: string,
     id: number,
     text: string,
-    // data-URIs, at most 4 per message; the gateway refuses the turn if the model has no `vision`
+    // data-URIs, at most 32 per message and 480 000 chars each; the gateway refuses the turn if the model has no `vision`, and answers 429 while two other messages upload
     images: string[],
     // aborts the fetch (socket), not the turn — the gateway keeps it running for attachTurn to pick up; POST …/stop is the only way to end it early
     signal?: AbortSignal,
@@ -654,8 +654,8 @@ export interface HistoryMessage {
     id: number;
     role: "user" | "assistant" | "tool";
     content: string;
-    /** User rows only — the data-URIs sent with the message, when the gateway records them. */
-    images?: string[];
+    /** User rows only — how many images came with the message; messageImages() fetches them. */
+    images?: number;
     meta?: {
         actor?: { kind: "human" | "agent" | "system"; agent?: string };
         callId?: string;
@@ -740,6 +740,23 @@ export async function listHistory(
             } };
         }),
     };
+}
+
+/** A stored message's images as data-URIs, in the order they were sent. Up to 32 of 480 000 chars each, so a slow link gets two minutes. */
+export async function messageImages(agent: string, id: number, messageId: number, signal?: AbortSignal): Promise<string[]> {
+    const path = `${convPath(agent, id)}/messages/${encodeURIComponent(messageId)}/images`;
+    const timeout = AbortSignal.timeout(120_000);
+    const c = await apiFetch(path, { signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
+    if (!c.res.ok) {
+        const said = await refusal(c);
+        throw new ApiError(c.res.status, `GET ${path} → ${c.res.status}${said ? `: ${said}` : ""}`);
+    }
+    const body = await readJson<{ images?: unknown }>(c);
+    // they land in <img src>: image data-URIs only
+    if (!Array.isArray(body.images) || !body.images.every((s) => typeof s === "string" && s.startsWith("data:image/"))) {
+        throw new Error(`GET ${path}: the answer carried no images.`);
+    }
+    return body.images as string[];
 }
 
 // ── one agent's own record: the llm-call trace ─────────────────────────────────
