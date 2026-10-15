@@ -1,3 +1,8 @@
+#[cfg(target_os = "macos")]
+use std::sync::atomic::Ordering;
+#[cfg(target_os = "macos")]
+use std::time::Duration;
+
 use tauri::ipc::Request;
 use tauri::{AppHandle, Manager, Url, WebviewWindow};
 use tauri_plugin_shell::ShellExt;
@@ -5,6 +10,10 @@ use tauri_plugin_shell::ShellExt;
 mod apps;
 mod notify;
 mod push;
+
+// the window was closed from native fullscreen: a Dock click brings it back the same way
+#[cfg(target_os = "macos")]
+static REOPEN_FULLSCREEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 #[tauri::command]
 fn quit_app(app: AppHandle, window: WebviewWindow, request: Request<'_>) -> Result<(), String> {
@@ -46,7 +55,24 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
-                let _ = window.hide();
+                if window.is_fullscreen().unwrap_or(false) {
+                    // a window hidden in native fullscreen leaves its Space black: leave it, then hide once the animation is over
+                    REOPEN_FULLSCREEN.store(true, Ordering::Relaxed);
+                    let _ = window.set_fullscreen(false);
+                    let window = window.clone();
+                    std::thread::spawn(move || {
+                        for _ in 0..40 {
+                            std::thread::sleep(Duration::from_millis(50));
+                            if !window.is_fullscreen().unwrap_or(true) {
+                                break;
+                            }
+                        }
+                        std::thread::sleep(Duration::from_millis(700));
+                        let _ = window.hide();
+                    });
+                } else {
+                    let _ = window.hide();
+                }
             }
             #[cfg(not(target_os = "macos"))]
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
@@ -63,6 +89,9 @@ pub fn run() {
                 let _ = window.unminimize();
                 let _ = window.show();
                 let _ = window.set_focus();
+                if REOPEN_FULLSCREEN.swap(false, Ordering::Relaxed) {
+                    let _ = window.set_fullscreen(true);
+                }
             }
         }
     });
