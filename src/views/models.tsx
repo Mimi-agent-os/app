@@ -1013,6 +1013,7 @@ function ModelCard({
                             ? `Params: ${Object.keys(model.params).join(", ")}`
                             : "Params: provider defaults"}
                     </span>
+                    <span style={SUB}>Parallel calls: {model.maxParallel ?? "no limit"}</span>
                 </div>
 
                 <div style={FACT}>

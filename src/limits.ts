@@ -1,14 +1,15 @@
 // How the Limits & prices tab reads a model: its edited fields into a PATCH, the worst-case hint beside the limit, and today's use against it.
-import type { LimitPatch, LimitRow, LimitUnit } from "./api.ts";
+import { patchLimit, updateModel, type LimitPatch, type LimitRow, type LimitUnit } from "./api.ts";
 import { isPositiveInt, number, plural } from "./shared.ts";
 import { usd } from "./spend.ts";
 
-/** The fields as typed: an empty price is 0, an empty limit is unlimited. */
+/** The fields as typed: an empty price is 0, an empty limit or parallel-call count is unlimited. */
 export interface LimitDraft {
     priceIn: string;
     priceOut: string;
     unit: LimitUnit;
     value: string;
+    parallel: string;
 }
 
 export const draftOf = (row: LimitRow): LimitDraft => ({
@@ -16,20 +17,24 @@ export const draftOf = (row: LimitRow): LimitDraft => ({
     priceOut: row.priceOutPerM ? String(row.priceOutPerM) : "",
     unit: row.limit?.unit ?? "tokens",
     value: row.limit ? String(row.limit.value) : "",
+    parallel: row.maxParallel === null ? "" : String(row.maxParallel),
 });
 
-/** `patch` holds only what differs from the row and is null while a field is invalid; the hint prices the limit at the output price, the worst case. */
-export function readDraft(row: LimitRow, draft: LimitDraft): { patch: LimitPatch | null; error: string; hint: string } {
+/** `patch` holds only what differs from the row and is null while a field is invalid, `parallel` is undefined while unchanged;
+ *  the hint prices the limit at the output price, the worst case. */
+export function readDraft(row: LimitRow, draft: LimitDraft): { patch: LimitPatch | null; parallel: number | null | undefined; error: string; hint: string } {
     const priceIn = draft.priceIn.trim() === "" ? 0 : Number(draft.priceIn);
     const priceOut = draft.priceOut.trim() === "" ? 0 : Number(draft.priceOut);
     const text = draft.value.trim();
     const value = Number(text);
+    const parallelText = draft.parallel.trim();
     const error = !(Number.isFinite(priceIn) && priceIn >= 0 && Number.isFinite(priceOut) && priceOut >= 0) ? "A price is dollars per 1M tokens: 0 or more."
-        : text === "" ? ""
-        : draft.unit === "tokens" && !isPositiveInt(text) ? "A token limit is a positive whole number. Leave it empty for no limit."
-        : draft.unit === "usd" && !(Number.isFinite(value) && value > 0) ? "A dollar limit is an amount above 0. Leave it empty for no limit."
+        : text !== "" && draft.unit === "tokens" && !isPositiveInt(text) ? "A token limit is a positive whole number. Leave it empty for no limit."
+        : text !== "" && draft.unit === "usd" && !(Number.isFinite(value) && value > 0) ? "A dollar limit is an amount above 0. Leave it empty for no limit."
+        : parallelText !== "" && !(isPositiveInt(parallelText) && Number(parallelText) <= 256) ? "Parallel calls is a whole number from 1 to 256. Leave it empty for no limit."
         : "";
-    if (error) return { patch: null, error, hint: "" };
+    if (error) return { patch: null, parallel: undefined, error, hint: "" };
+    const maxParallel = parallelText === "" ? null : Number(parallelText);
 
     const limit = text === "" ? null : { unit: draft.unit, value };
     const patch: LimitPatch = {};
@@ -41,7 +46,14 @@ export function readDraft(row: LimitRow, draft: LimitDraft): { patch: LimitPatch
     if (limit && priceOut > 0)
         hint = limit.unit === "tokens" ? `≈ up to ${usd(limit.value / 1e6 * priceOut)}` : `≈ at least ${number.format(Math.floor(limit.value / priceOut * 1e6))} tokens`;
     else if (limit?.unit === "usd" && priceIn === 0) hint = "A dollar limit on a model without prices is never reached. Set a price first.";
-    return { patch, error: "", hint };
+    return { patch, parallel: maxParallel === row.maxParallel ? undefined : maxParallel, error: "", hint };
+}
+
+/** Parallel calls are a base model setting, saved through the model route; prices and the daily limit through their own. */
+export async function saveDraft(row: LimitRow, patch: LimitPatch, parallel: number | null | undefined): Promise<LimitRow> {
+    if (parallel === undefined) return patchLimit(row.name, patch);
+    await updateModel(row.name, { maxParallel: parallel });
+    return Object.keys(patch).length > 0 ? patchLimit(row.name, patch) : { ...row, maxParallel: parallel };
 }
 
 /** Today's use in the limit's own unit; `fraction` is null with no limit. */

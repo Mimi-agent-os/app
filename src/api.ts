@@ -37,6 +37,8 @@ export interface ModelSummary {
     keySet: boolean;
     /** The model accepts images in a user message; attachment is disabled against a model without it. */
     vision: boolean;
+    /** At most this many calls of this model at once; null sends every call at once. */
+    maxParallel: number | null;
 }
 
 export interface ParamField {
@@ -83,6 +85,8 @@ export interface ModelPatch {
     contextTokens?: number;
     params?: Record<string, unknown>;
     vision?: boolean;
+    /** null clears the limit. */
+    maxParallel?: number | null;
     /** Write-only: replaces the provider key in the encrypted mimi/.env; never readable back. */
     apiKey?: string;
 }
@@ -602,6 +606,8 @@ export interface LimitRow {
     priceOutPerM: number;
     /** null is unlimited. */
     limit: { unit: LimitUnit; value: number } | null;
+    /** Shown here, saved through updateModel; null is no limit. */
+    maxParallel: number | null;
     today: { tokens: number; promptTokens: number; completionTokens: number; cost: number };
     day: DayInfo;
 }

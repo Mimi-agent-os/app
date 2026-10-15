@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import type { ReactElement } from "react";
 
-import { listLimits, patchLimit, type LimitRow } from "../api.ts";
+import { listLimits, type LimitRow } from "../api.ts";
 import { Btn, Empty, Panel, Skeleton } from "../components/ui.tsx";
-import { draftOf, limitUse, readDraft, type LimitDraft } from "../limits.ts";
+import { draftOf, limitUse, readDraft, saveDraft, type LimitDraft } from "../limits.ts";
 import { errorMessage, Err, plural } from "../shared.ts";
 import { resetTime } from "../spend.ts";
 import "../limits.css";
@@ -56,6 +56,8 @@ export default function LimitsPanel(): ReactElement {
             <p className="limits-note">
                 Prices are dollars per 1M tokens and price all usage, past days included. A daily limit counts one model's use by every agent and by model checks.
                 At its limit an agent's call goes to that agent's fallback when the fallback has room, and is refused otherwise; model checks still run.
+                Parallel calls: empty is no limit. Set it for a server that can only take a few calls at once, like llama.cpp with few slots.
+                Each model counts its own, even two models on one server.
             </p>
 
             {error && <Err>{error}{rows ? " Showing the last loaded figures." : ""}</Err>}
@@ -88,8 +90,8 @@ function LimitEditor({ row, onSaved }: { row: LimitRow; onSaved: (row: LimitRow)
     const [error, setError] = useState("");
 
     const shown = draft ?? draftOf(row);
-    const { patch, error: invalid, hint } = readDraft(row, shown);
-    const changed = patch === null || Object.keys(patch).length > 0;
+    const { patch, parallel, error: invalid, hint } = readDraft(row, shown);
+    const changed = patch === null || Object.keys(patch).length > 0 || parallel !== undefined;
     const use = limitUse(row);
     const edit = (field: Partial<LimitDraft>): void => {
         setDraft({ ...shown, ...field });
@@ -97,10 +99,10 @@ function LimitEditor({ row, onSaved }: { row: LimitRow; onSaved: (row: LimitRow)
     };
 
     const save = async (): Promise<void> => {
-        if (!patch || Object.keys(patch).length === 0 || saving) return;
+        if (!patch || !changed || saving) return;
         setSaving(true);
         try {
-            onSaved(await patchLimit(row.name, patch));
+            onSaved(await saveDraft(row, patch, parallel));
             setDraft(null);
         } catch (e) {
             setError(errorMessage(e, "Could not save this model's limit."));
@@ -141,6 +143,10 @@ function LimitEditor({ row, onSaved }: { row: LimitRow; onSaved: (row: LimitRow)
                         </span>
                     </span>
                 </div>
+                <label>
+                    Parallel calls
+                    <input type="text" inputMode="numeric" placeholder="No limit" value={shown.parallel} aria-label={`${row.name} parallel calls`} onChange={(e) => edit({ parallel: e.target.value })} />
+                </label>
                 {hint && <span className="limit-hint">{hint}</span>}
                 {changed && (
                     <span className="limit-acts">

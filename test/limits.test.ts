@@ -23,7 +23,7 @@ registerHooks({
 
 const DAY = { today: "2026-09-29", timeZone: "Europe/Helsinki", resetsAt: "2026-09-29T21:00:00.000Z" };
 const row = (over: Partial<LimitRow> = {}): LimitRow => ({
-    uid: "uid-fast", name: "fast", provider: "openai", priceInPerM: 0, priceOutPerM: 0, limit: null,
+    uid: "uid-fast", name: "fast", provider: "openai", priceInPerM: 0, priceOutPerM: 0, limit: null, maxParallel: null,
     today: { tokens: 0, promptTokens: 0, completionTokens: 0, cost: 0 }, day: DAY, ...over,
 });
 
@@ -41,12 +41,16 @@ Object.assign(globalThis, {
             held = { ...held, ...body } as LimitRow;
             return Promise.resolve({ res: new Response(JSON.stringify(held)) });
         }
+        if (method === "PATCH" && path === "/models/fast%2Fv2") {
+            held = { ...held, maxParallel: body?.["maxParallel"] as number | null };
+            return Promise.resolve({ res: new Response(JSON.stringify({ ok: true })) });
+        }
         return Promise.resolve({ res: new Response(JSON.stringify({ error: "no such model" }), { status: 404 }) });
     },
 });
 
 const { listLimits, patchLimit } = await import("../src/api.ts");
-const { draftOf, limitUse, readDraft } = await import("../src/limits.ts");
+const { draftOf, limitUse, readDraft, saveDraft } = await import("../src/limits.ts");
 
 test("a price or limit edit is sent as only what changed, by model name, and the answer is the new row", async () => {
     held = row({ name: "fast/v2" });
@@ -63,6 +67,29 @@ test("a price or limit edit is sent as only what changed, by model name, and the
     assert.equal(saved.priceOutPerM, 15);
     assert.deepEqual(readDraft(saved, draftOf(saved)).patch, {}, "the saved row reads back as nothing to save");
     await assert.rejects(patchLimit("gone", { priceInPerM: 1 }), /404: no such model/);
+});
+
+test("parallel calls go through the model route by name, alone or before a price, and an empty field is no limit", async () => {
+    held = row({ name: "fast/v2" });
+    requests.length = 0;
+    const read = readDraft(held, { ...draftOf(held), parallel: " 2 " });
+    assert.deepEqual([read.patch, read.parallel], [{}, 2], "only the parallel calls changed");
+    const saved = await saveDraft(held, read.patch!, read.parallel);
+    assert.equal(saved.maxParallel, 2);
+    assert.deepEqual(requests, [{ method: "PATCH", path: "/models/fast%2Fv2", body: { maxParallel: 2 } }], "the limits route is not called for nothing");
+    assert.equal(readDraft(saved, draftOf(saved)).parallel, undefined, "the saved row reads back as nothing to save");
+
+    requests.length = 0;
+    const both = readDraft(saved, { ...draftOf(saved), parallel: "", priceIn: "3" });
+    assert.deepEqual([both.patch, both.parallel], [{ priceInPerM: 3 }, null], "emptied, the limit is cleared with null");
+    const after = await saveDraft(saved, both.patch!, both.parallel);
+    assert.deepEqual(requests.map((r) => [r.method, r.path, r.body]), [
+        ["PATCH", "/models/fast%2Fv2", { maxParallel: null }],
+        ["PATCH", "/limits/fast%2Fv2", { priceInPerM: 3 }],
+    ]);
+    assert.deepEqual([after.maxParallel, after.priceInPerM], [null, 3], "the answer is the limits route's fresh row");
+    assert.equal(readDraft(row({ maxParallel: 4 }), draftOf(row({ maxParallel: 4 }))).parallel, undefined);
+    assert.equal(draftOf(row({ maxParallel: 4 })).parallel, "4");
 });
 
 test("clearing the limit sends null, and an empty price is 0", () => {
@@ -93,9 +120,14 @@ test("an invalid field blocks the save and says why", () => {
         [{ ...base, unit: "usd", value: "five" }, /above 0/],
         [{ ...base, priceIn: "-1" }, /0 or more/],
         [{ ...base, priceOut: "abc" }, /0 or more/],
+        [{ ...base, parallel: "0" }, /whole number from 1 to 256/],
+        [{ ...base, parallel: "1.5" }, /whole number from 1 to 256/],
+        [{ ...base, parallel: "257" }, /whole number from 1 to 256/],
+        [{ ...base, parallel: "two" }, /whole number from 1 to 256/],
     ] as const) {
         const read = readDraft(row(), draft);
         assert.equal(read.patch, null, JSON.stringify(draft));
+        assert.equal(read.parallel, undefined);
         assert.match(read.error, why);
     }
     assert.equal(readDraft(row(), { ...base, unit: "usd", value: "0.5" }).error, "");
@@ -118,7 +150,10 @@ test("Limits & prices is its own Settings section, next to Models, and refreshes
     assert.match(settings, /\{current === "limits" && <LimitsPanel \/>\}/);
     const view = await readFile(new URL("../src/views/limits.tsx", import.meta.url), "utf8");
     assert.match(view, /addEventListener\("mimi:usage-changed", refresh\)/);
-    assert.match(view, /patchLimit\(row\.name, patch\)/, "saved by the model's current name");
+    assert.match(view, /saveDraft\(row, patch, parallel\)/, "saved by the model's current name, through both routes");
+    assert.match(view, /Parallel calls\s*<input [^>]*placeholder="No limit" value=\{shown\.parallel\}/, "the field sits in the row, empty for no limit");
+    assert.match(view, /Parallel calls: empty is no limit\. Set it for a server that can only take a few calls at once, like llama\.cpp with few slots\./);
+    assert.match(view, /Each model counts its own, even two models on one server\./, "the note says the count is per model, not per server");
     assert.match(view, /\$\{reached\} at \$\{plural\(reached, "its", "their"\)\} daily limit/, "two models are at their limit, not its");
     assert.match(view, /model checks still run/, "a limit never refuses a model check, and the note says so");
 });

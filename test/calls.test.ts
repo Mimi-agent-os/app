@@ -125,7 +125,7 @@ const meter = new Function("rows", "models", meterBody[1] as string) as (rows: H
 const currentModel = new Function("rows", "models", currentBody[1] as string) as (rows: HistoryMessage[] | null, models: ModelSummary[] | null) => ModelSummary | null;
 
 const model = (name: string, over: Partial<ModelSummary>): ModelSummary => ({
-    name, modelUid: null, provider: "vllm", endpoint: "http://127.0.0.1:8000", contextTokens: 8000, isDefault: false, params: {}, keyEnv: "", keySet: false, vision: false, ...over,
+    name, modelUid: null, provider: "vllm", endpoint: "http://127.0.0.1:8000", contextTokens: 8000, isDefault: false, params: {}, keyEnv: "", keySet: false, vision: false, maxParallel: null, ...over,
 });
 // "fast" (8k window) was renamed "fast-8k" after the turn; the default has a 57k window
 const registry = [model("big", { modelUid: "uid-big", contextTokens: 57_000, isDefault: true }), model("fast-8k", { modelUid: "uid-fast" })];
