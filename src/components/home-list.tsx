@@ -4,7 +4,7 @@ import type { ReactElement } from "react";
 
 import type { AgentSummary } from "../api.ts";
 import type { ApprovalSummary } from "../approval-api.ts";
-import { agentLanding, agentState, HOME_MAX, homeChats, NO_CHATS, refreshAgent, useAgentChats } from "../agent-chats.ts";
+import { agentLanding, agentState, homeChats, NO_CHATS, refreshAgent, useAgentChats } from "../agent-chats.ts";
 // imported as a module so vite serves it under base "/app/"
 import mascot from "../assets/mimi-mascot.png";
 import { useFlip } from "../motion.ts";
@@ -33,6 +33,8 @@ interface HomeListProps {
 
 // agents whose chat rows the owner folded away on this device
 const COLLAPSED_KEY = "mimi-os:collapsed";
+// an agent shows its pinned chats and its latest ones; "All" opens the rest in place
+const RECENT = 5;
 
 /** One agent's rows as they were when the mouse came in, with the pinned ids they held then. */
 interface Held {
@@ -56,8 +58,8 @@ function HomeList({ agents, error, approvals, route, folded, onFold, onSearch, o
             return new Set();
         }
     });
-    // chat rows the list has room for, measured on resize and when the agents change, never on a data change, so a streaming reply cannot move the list
-    const [room, setRoom] = useState(0);
+    // agents whose every chat is open in the list, for this session
+    const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
     const native = tauriInvoke() !== null && !androidApp;
 
     const needs = approvals.toSorted((a, b) => a.deadline - b.deadline);
@@ -69,23 +71,12 @@ function HomeList({ agents, error, approvals, route, folded, onFold, onSearch, o
     const open = route?.at === "chat" ? route : null;
     const named = route?.at === "chat" || route?.at === "new" || route?.at === "agent" ? route.agent : null;
 
-    const loads = (agents ?? []).map((me) => {
+    const groups = (agents ?? []).map((me) => {
         const entry = chats.get(me.name) ?? NO_CHATS;
         const openId = open?.agent === me.name ? open.id : undefined;
-        return { me, entry, openId, shut: collapsed.has(me.name), wants: homeChats(entry.rows ?? [], openId, HOME_MAX).shown.length };
-    });
-    // the rows that fit, shared out: the agent wanting fewest goes first, and whatever it leaves passes to the rest
-    const limits = new Map<string, number>();
-    const sharing = loads.filter((l) => !l.shut).toSorted((a, b) => a.wants - b.wants);
-    let left = room;
-    sharing.forEach(({ me, wants }, i) => {
-        const limit = Math.min(HOME_MAX, Math.max(3, Math.floor(left / (sharing.length - i))));
-        limits.set(me.name, limit);
-        left -= Math.min(limit, wants);
-    });
-
-    const groups = loads.map(({ me, entry, openId, shut }) => {
-        const home = homeChats(entry.rows ?? [], openId, limits.get(me.name));
+        const shut = collapsed.has(me.name);
+        const all = expanded.has(me.name);
+        const home = homeChats(entry.rows ?? [], openId, all ? Infinity : RECENT);
         // a collapsed agent keeps only the chat on screen
         const live = shut ? home.shown.filter((c) => c.id === openId) : home.shown;
         const pins = live.filter((c) => c.pinned).map((c) => c.id).join(" ");
@@ -94,7 +85,7 @@ function HomeList({ agents, error, approvals, route, folded, onFold, onSearch, o
             ? [...held.order.flatMap((id) => live.find((c) => c.id === id) ?? []), ...live.filter((c) => !held.order.includes(c.id))]
             : live;
         const state = agentState(me, approvals.some((g) => g.agent === me.name), entry.rows?.some((c) => c.busy) ?? false);
-        return { me, entry, rows, pins, shut, total: home.total, hidden: home.hidden, state };
+        return { me, entry, rows, pins, shut, all, total: home.total, hidden: home.hidden, state };
     });
     // a pin or unpin under a still mouse takes the new order at once and holds that one instead
     if (frozen && groups.some((g) => frozen.has(g.me.name) && frozen.get(g.me.name)?.pins !== g.pins)) {
@@ -123,29 +114,11 @@ function HomeList({ agents, error, approvals, route, folded, onFold, onSearch, o
         };
     }, [folded]);
 
-    const names = (agents ?? []).map((a) => a.name).join(" ");
-    const shutNames = [...collapsed].join(" ");
-    const loaded = agents !== null && agents.every((a) => chats.get(a.name)?.rows);
-    useLayoutEffect(() => {
-        const el = scroll.current;
-        if (!el || folded) return;
-        const measure = (): void => {
-            // a hidden list (the phone's Home under a pushed screen) is measured again when it shows
-            if (el.clientHeight === 0) return;
-            const style = getComputedStyle(el);
-            const rowHeight = parseFloat(style.getPropertyValue("--row-h"));
-            const top = el.getBoundingClientRect().top - el.scrollTop;
-            const end = (el.lastElementChild?.getBoundingClientRect().bottom ?? top) - top + parseFloat(style.paddingBottom);
-            // the rows now shown plus the free height below them, less nothing else: headings and agent rows stay where they are
-            const rows = el.querySelectorAll(".agent:not([data-shut]) [data-flip], .chat-skel").length;
-            if (rowHeight > 0) setRoom(rows + Math.floor((el.clientHeight - end) / rowHeight));
-        };
-        measure();
-        const observer = new ResizeObserver(measure);
-        observer.observe(el);
-        return () => observer.disconnect();
-    }, [folded, names, shutNames, loaded]);
-
+    const toggleAll = (name: string): void => {
+        const next = new Set(expanded);
+        if (!next.delete(name)) next.add(name);
+        setExpanded(next);
+    };
     const toggleShut = (name: string): void => {
         const next = new Set(collapsed);
         if (!next.delete(name)) next.add(name);
@@ -253,7 +226,7 @@ function HomeList({ agents, error, approvals, route, folded, onFold, onSearch, o
                     ) : (
                         <div className={fresh ? "home-agents enter" : "home-agents"}
                             onAnimationEnd={(e) => { if (e.target === e.currentTarget) setFresh(false); }}>
-                            {groups.map(({ me, entry, rows, shut, total, hidden, state }) => {
+                            {groups.map(({ me, entry, rows, shut, all, total, hidden, state }) => {
                                 const on = route?.at === "agent" && route.agent === me.name;
                                 const drafting = route?.at === "new" && route.agent === me.name;
                                 // cached rows stay clickable while the agent is connected: the chat reads its own history
@@ -287,8 +260,10 @@ function HomeList({ agents, error, approvals, route, folded, onFold, onSearch, o
                                                             gate={gateByChat.get(`${me.name}#${c.id}`)} stale={stale} />
                                                     </li>
                                                 ))}
-                                            {!shut && hidden > 0 && (
-                                                <li><button type="button" className="agent-more" onClick={() => go({ at: "agent", agent: me.name })}>All {total} chats</button></li>
+                                            {!shut && (hidden > 0 || all) && (
+                                                <li><button type="button" className="agent-more" aria-expanded={all} onClick={() => toggleAll(me.name)}>
+                                                    {all ? "Show fewer" : `All ${total} chats`}
+                                                </button></li>
                                             )}
                                             {!shut && entry.rows !== null && entry.rows.length === 0 && entry.error && (
                                                 <li><button type="button" className="agent-more" onClick={() => void refreshAgent(me.name).catch(() => undefined)}>Chats did not load. Retry</button></li>
